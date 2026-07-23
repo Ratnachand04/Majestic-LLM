@@ -1,0 +1,5 @@
+# Router policy (skeleton).
+targets: []                # populated from the expert registry at runtime
+escalation:
+  enabled: true
+  to: core                 # escalate hard steps back to the reasoning core
