@@ -1,0 +1,23 @@
+# Base-model catalogue. Keep entries SMALL and device-friendly by default.
+# `id` is a Hugging Face model id (or "mock"); size/license/fit guide selection.
+models:
+  - id: mock
+    params_b: 0
+    license: n/a
+    good_for: [demo, tests]              # offline echo/plan-stub core
+  - id: sshleifer/tiny-gpt2
+    params_b: 0.001
+    license: mit
+    good_for: [tests]
+  - id: prajjwal1/bert-tiny
+    params_b: 0.004
+    license: mit
+    good_for: [classification]
+  - id: distilgpt2
+    params_b: 0.082
+    license: apache-2.0
+    good_for: [chat, generation]
+  - id: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    params_b: 1.1
+    license: apache-2.0
+    good_for: [chat, reasoning]          # small instruct core for real runs
