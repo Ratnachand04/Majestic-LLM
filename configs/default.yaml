@@ -1,0 +1,19 @@
+# Majestic LLM — default runtime settings.
+# Tiny/mock defaults so the whole pipeline runs offline on CPU. Everything is
+# configurable; nothing large is hardcoded. Env vars (MAJESTIC_*) override these.
+core:
+  model: mock              # "mock" runs offline; set to a small HF instruct id to use a real core
+  mixture_of_experts: false
+  max_new_tokens: 256
+  temperature: 0.7
+routing:
+  policy: cheapest_sufficient
+  confidence_threshold: 0.7
+retrieval:
+  vector_store: memory     # memory | faiss
+  top_k: 5
+  embedding_model: hash    # hash (offline, no deps) | a sentence-transformers id
+verification:
+  enabled: true
+seed: 0
+registry_path: ./registry
