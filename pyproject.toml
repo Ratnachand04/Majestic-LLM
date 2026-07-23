@@ -1,0 +1,48 @@
+[project]
+name = "majestic-llm"
+version = "0.1.0"
+description = "Majestic LLM — a compound universal AI system and specialist factory."
+requires-python = ">=3.10"
+# Light runtime deps needed for the offline core system. Heavy ML deps
+# (torch, transformers, peft, trl, faiss, onnx, ...) are optional and imported
+# lazily; see requirements.txt and the [project.optional-dependencies] extras.
+dependencies = [
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27"]
+ml = ["torch", "transformers", "peft", "trl", "accelerate"]
+retrieval = ["sentence-transformers", "faiss-cpu"]
+compress = ["bitsandbytes", "auto-gptq", "autoawq", "onnx", "onnxruntime"]
+dev = ["pytest>=8", "ruff>=0.5", "httpx>=0.27"]
+
+[project.scripts]
+majestic = "cli.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["majestic", "modelrig", "api", "cli"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q -m 'not integration'"
+markers = [
+    "integration: tests that need heavy deps, network, or a GPU (skipped by default)",
+]
+filterwarnings = [
+    # Cosmetic third-party deprecation from Starlette's TestClient (not our code).
+    "ignore:Using .httpx. with .starlette.testclient.",
+]
