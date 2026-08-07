@@ -1,34 +1,61 @@
 # Device profiles for the feasibility engine.
+#
 # ram_gb: total device RAM; accelerator: cpu|gpu|npu; compute_gflops: rough
-# sustained throughput; battery_wh: battery capacity (0 => mains powered).
+# sustained throughput; battery_wh: battery capacity (0 => mains powered);
+# usable_ram_fraction: share one app may hold before the OS pushes back.
+#
+# measured: FALSE everywhere until a physical device lab fills these in (GAP-10).
+# On-device latency and battery are DESIGN TARGETS, not measurements. Energy and
+# thermal throttling — not raw speed — are the binding mobile constraints
+# (MELTing Point 2403.12844). Adapter-swap latency on mid-range phones is
+# likewise unvalidated and is a central product promise.
 devices:
   - name: android_lowend
     ram_gb: 3
     accelerator: cpu
     compute_gflops: 15
     battery_wh: 11
+    usable_ram_fraction: 0.5
+    measured: false
   - name: android_midrange
     ram_gb: 6
     accelerator: cpu
     compute_gflops: 40
     battery_wh: 17
+    usable_ram_fraction: 0.6
+    measured: false
+  - name: android_tablet_4gb
+    ram_gb: 4
+    accelerator: cpu
+    compute_gflops: 25
+    battery_wh: 28
+    usable_ram_fraction: 0.6
+    measured: false
   - name: android_flagship
     ram_gb: 12
     accelerator: npu
     compute_gflops: 120
     battery_wh: 19
+    usable_ram_fraction: 0.65
+    measured: false
   - name: raspberry_pi4
     ram_gb: 4
     accelerator: cpu
     compute_gflops: 10
     battery_wh: 0
+    usable_ram_fraction: 0.7
+    measured: false
   - name: laptop_cpu
     ram_gb: 16
     accelerator: cpu
     compute_gflops: 200
     battery_wh: 60
+    usable_ram_fraction: 0.7
+    measured: false
   - name: laptop_gpu
     ram_gb: 16
     accelerator: gpu
     compute_gflops: 8000
     battery_wh: 80
+    usable_ram_fraction: 0.7
+    measured: false
