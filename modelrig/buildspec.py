@@ -31,6 +31,8 @@ class DeviceProfile:
     accelerator: str = "cpu"        # cpu | gpu | npu
     compute_gflops: float = 10.0    # rough sustained throughput for the predictor
     battery_wh: float = 0.0         # 0 => mains powered (no battery budget)
+    usable_ram_fraction: float = 0.6  # share of RAM one app may hold before the OS pushes back
+    measured: bool = False          # True only when a device lab measured this profile (GAP-10)
 
 
 @dataclass
