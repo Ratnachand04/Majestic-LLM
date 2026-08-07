@@ -14,6 +14,23 @@ The code was built in phases; this is also the recommended reading/extension ord
 | 6 | Feasibility engine | `modelrig/feasibility.py` |
 | 7 | Teacher loop + CLI + API | `modelrig/teacher_loop.py`, `cli/main.py`, `api/app.py` |
 | 8 | Hardening + docs | this file, `docs/USAGE.md` |
+| 9 | **Compiler architecture** | see below |
+
+### Phase 9 — the compiler architecture
+The system became a *model compiler* rather than a build script. New modules, in
+dependency order:
+
+| Layer | Modules |
+|---|---|
+| Foundations | `modelrig/primitives.py` (the eight), `licence.py` (GAP-08), `catalogue.py` |
+| The contract | `modelrig/ir.py` — Spec / Build Plan / Artefact IR, hash-addressed (GAP-01) |
+| Verification | `modelrig/gates.py` — Gates 1/2/3, checked before any GPU |
+| Front end | `modelrig/forge.py` — slot-filling interview |
+| Passes | `modelrig/planner.py` — precedent warm start, validator, mutation |
+| Build | `modelrig/data_factory.py`, `proving_ground.py` |
+| Output | `modelrig/cartridge.py`, `registry.py` (content-addressed, lineage) |
+| Runtime | `majestic/fabric/` (typed DAG + static analyser), `majestic/router/deferral.py`, `majestic/flywheel.py` |
+| End to end | `modelrig/pipeline.py` |
 
 ## Principles
 - **Offline-first.** Nothing in the default path may require a network or GPU.
@@ -27,7 +44,31 @@ The code was built in phases; this is also the recommended reading/extension ord
 - **Honest bounds.** If something can't be implemented, leave a clear
   `NotImplementedError` + `TODO`; never fake outputs or weaken a test to pass.
 
+## Rules specific to the compiler
+- **Never let a gate become a warning.** Gates 1/2/3 and the Data Factory's QA
+  gates BLOCK. If something should merely warn, put it in `warnings`, not
+  `reasons`.
+- **Refuse rather than degrade.** Below the seed floor, off-catalogue, or
+  licence-blocked: raise or return a refusal with a concrete reason. Never ship a
+  model that will quietly get worse.
+- **Label unmeasured numbers.** Anything predicted rather than measured must say
+  so (`PerfEstimate.measured`, `DeviceProfile.measured`). See
+  [research-gaps.md](research-gaps.md).
+- **The repairer needs external evidence.** Never add a code path where a
+  component "fixes itself" without a `FailureReport`.
+- **An LLM proposes; a validator disposes.** No LLM output may reach a GPU
+  without passing `gate2_plan_feasibility`.
+
 ## Extending the system
+- **Add a task primitive:** extend `TaskPrimitive` and `_SPECS` in
+  `modelrig/primitives.py` with a seed floor, default metric and minimum base
+  size. The set is *closed* on purpose — adding one is a taxonomy decision, so
+  re-run `coverage_report()` against real traffic (GAP-06).
+- **Add a base model:** append to `BASES` in `modelrig/catalogue.py` with its KV
+  geometry (`n_layers`, `n_kv_heads`, `head_dim`) and licence. Keep the catalogue
+  NARROW: each extra base fragments multi-adapter serving economics (A-04).
+- **Add a verification axis:** add a `_method` to `ProvingGround`, append it in
+  `evaluate()`, and map its failure to mutations in `_suggest`.
 - **Add an expert/tool:** subclass `majestic.experts.base.Expert`, set `name` +
   `capabilities`, implement `run(**kwargs)` and (optionally) `estimate_cost`.
   Register it in `majestic/factory.py`. The `RuleRouter` will route to it by
