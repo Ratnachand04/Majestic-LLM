@@ -92,3 +92,74 @@ def test_missing_device_raises():
     spec = BuildSpec(task="t", base_model="centroid", method=TrainingMethod.CENTROID)
     with pytest.raises(ValueError):
         engine.evaluate(spec)
+
+
+# --- KV cache accounting (A-01) ------------------------------------------ #
+def test_kv_cache_is_counted_in_the_footprint():
+    """Deployable size = weights + KV cache + runtime, never weights alone."""
+    p = HeuristicPerfPredictor()
+    est = p.predict("Qwen/Qwen3-1.7B", "int4", "gguf", PHONE, context_length=2048)
+    assert est.kv_cache_mb > 0
+    assert est.ram_mb == pytest.approx(
+        est.weights_mb + est.kv_cache_mb + est.runtime_mb, rel=1e-3
+    )
+
+
+def test_kv_cache_grows_linearly_with_context():
+    """The variable nobody budgets for, and the usual cause of on-device OOM."""
+    p = HeuristicPerfPredictor()
+    short = p.predict("Qwen/Qwen3-1.7B", "int4", "gguf", PHONE, context_length=1024)
+    long = p.predict("Qwen/Qwen3-1.7B", "int4", "gguf", PHONE, context_length=8192)
+    assert long.kv_cache_mb == pytest.approx(short.kv_cache_mb * 8, rel=1e-3)
+    assert long.ram_mb > short.ram_mb
+
+
+def test_long_context_can_flip_a_fitting_model_to_infeasible():
+    engine = HeuristicFeasibilityEngine()
+    fits = BuildSpec(task="t", base_model="Qwen/Qwen3-1.7B",
+                     method=TrainingMethod.CENTROID, quantization="int4",
+                     device=PHONE, extras={"context_length": 2048})
+    huge_ctx = BuildSpec(task="t", base_model="Qwen/Qwen3-1.7B",
+                         method=TrainingMethod.CENTROID, quantization="int4",
+                         device=PHONE, extras={"context_length": 131072})
+    assert engine.evaluate(fits).feasible is True
+    assert engine.evaluate(huge_ctx).feasible is False
+
+
+def test_four_bit_is_about_055gb_per_billion_params():
+    """The size ladder from A-01: 1.7B at 4-bit is ~1.1 GB on disk."""
+    p = HeuristicPerfPredictor()
+    est = p.predict("Qwen/Qwen3-1.7B", "int4", "gguf", PHONE)
+    assert 900 < est.weights_mb < 1100
+
+
+def test_two_times_file_size_rule_caps_the_device():
+    """A 4 GB phone tops out near 1.7B at 4-bit, not the 3.5B file size suggests."""
+    engine = HeuristicFeasibilityEngine()
+    tablet = DeviceProfile(name="t", ram_gb=4, accelerator="cpu", battery_wh=28)
+    max_b = engine.max_base_for(tablet, "int4")
+    assert 1.0 < max_b < 2.5     # comfortably below the naive 3.5B
+
+
+def test_max_base_grows_with_device_ram():
+    engine = HeuristicFeasibilityEngine()
+    small = DeviceProfile(name="s", ram_gb=3, accelerator="cpu")
+    big = DeviceProfile(name="b", ram_gb=16, accelerator="cpu")
+    assert engine.max_base_for(big) > engine.max_base_for(small)
+
+
+def test_estimates_are_flagged_unmeasured():
+    """GAP-10: mobile numbers are design targets until a device lab measures them."""
+    p = HeuristicPerfPredictor()
+    assert p.predict("Qwen/Qwen3-1.7B", "int4", "gguf", PHONE).measured is False
+
+
+def test_outcome_predictor_cold_starts_then_predicts():
+    """GAP-02 scaffold: no prediction until enough history exists."""
+    from modelrig.feasibility import OutcomePredictor
+
+    pred = OutcomePredictor(min_history=3)
+    assert pred.predict_pass_probability("extract") is None
+    for i in range(3):
+        pred.record(f"s{i}", f"p{i}", "extract", passed=i > 0)
+    assert pred.predict_pass_probability("extract") == pytest.approx(2 / 3, abs=1e-4)
