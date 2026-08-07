@@ -49,7 +49,81 @@ curl -s localhost:8000/generate -H 'content-type: application/json' \
 ```
 `GET /health` returns `{"status":"ok"}`.
 
-## 4. Build a device specialist (ModelRig)
+## 4. Compile a specification into a certified cartridge
+
+This is the main flow: plain language in, a **scorecard plus an installable
+artefact** out. Every stage is gated before it spends anything.
+
+```bash
+# See the ten-act worked example end to end, offline:
+python demo/run_compiler_demo.py
+
+# 1. Interview: plain language -> a typed, hash-addressed Spec IR
+python -m cli.main forge "Classify support tickets by sentiment on an android \
+phone. Must work offline. We have 120 real tickets." \
+    --offline --seed-count 120 --out spec.json
+
+# 2. Compile: Gate 1 -> planner (Gate 2) -> data -> train -> proving (Gate 3)
+python -m cli.main compile --spec spec.json --data tickets.jsonl
+
+# 3. What primitives are supported at all?
+python -m cli.main primitives
+```
+
+`forge` prints the slots it filled by itself and the few questions still worth
+asking, ranked by information gain. It refuses to guess an ambiguous slot —
+"works offline" meaning *always* versus *survives a dropout* is asked, not
+assumed.
+
+`compile` prints each gate, the plan chosen under the device cap, the seven-axis
+scorecard, the answer-flip rate against FP16, and the cartridge id. When a build
+is impossible it **refuses with reasons and spends nothing**:
+
+```
+admitted  : False
+stage     : gate1  (no planning, no data, no GPU)
+  - seed data 5 is below the floor of 200 real examples for primitive 'generate'
+  - quality bar unachievable: 'generate' needs at least 1.7B but
+    android_lowend caps the base at 1.396B at 4-bit
+```
+
+Programmatically:
+```python
+from modelrig.forge import Forge
+from modelrig.ir import DataRights
+from modelrig.pipeline import MajesticCompiler
+
+forge = Forge()
+state = forge.parse("Classify tickets by sentiment on an android phone")
+state = forge.answer(state, data_rights=DataRights.CUSTOMER_OWNED,
+                     seed_data_count=120, offline_required=True)
+spec = forge.to_spec(state)
+
+result = MajesticCompiler().compile(spec, corpus)
+print(result.admitted, result.refusal)
+for axis in result.scorecard.axes:
+    print(axis.name, axis.score, axis.passed)
+```
+
+## 4b. Verify a Fabric graph before it runs
+
+No agent framework can statically prove a graph runs without a network. This one
+can, because Fabric is a typed DAG:
+
+```bash
+python -m cli.main verify-graph graph.json --offline
+```
+```json
+{"name": "flow",
+ "nodes": [{"name": "extract", "kind": "cartridge", "ram_mb": 30},
+           {"name": "notify", "kind": "tool", "requires_network": true}],
+ "edges": [["extract", "notify"]]}
+```
+It reports broken offline closure, RAM and cost bounds, and any path where
+untrusted retrieved content can reach a privileged tool — then suggests
+splitting into an offline core and an online tail.
+
+## 5. Build a device specialist (ModelRig)
 Distill a capability into a tiny, quantized, device-checked model:
 ```bash
 python -m cli.main build --capability sentiment --device android_midrange
@@ -81,15 +155,23 @@ result = Factory(base_path="./registry").build(
 print(result.success, result.eval_report, result.artifact_path)
 ```
 
-## 5. Feasibility check
+## 6. Feasibility check
 Will a build fit a device *before* you run it?
 ```bash
 python -m cli.main feasibility --spec my_spec.json --device android_midrange
 ```
-Returns predicted RAM / latency / battery, the device budget, headroom, and — on
-failure — concrete reasons.
+Returns predicted RAM (broken into **weights + KV cache + runtime**), latency,
+battery, the device budget, headroom, and — on failure — concrete reasons.
 
-## 6. Testing
+The KV cache is the term nobody budgets for: it grows linearly with context
+length and is the usual cause of on-device OOM. A model that fits at 2k context
+can be infeasible at 128k, and the engine says so.
+
+> **Unmeasured.** Every device profile ships `measured: false`. On-device latency
+> and battery are heuristics until a physical device lab fills them in (GAP-10).
+> The code labels every such number rather than implying it was measured.
+
+## 7. Testing
 ```bash
 pytest                      # offline suite (green, no network/GPU)
 pytest -m integration       # heavy paths (needs the optional extras)
