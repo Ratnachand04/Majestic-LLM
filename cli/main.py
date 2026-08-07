@@ -33,6 +33,25 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--spec", help="Path to a BuildSpec (.json/.yaml)")
     f.add_argument("--capability", help="Capability name (uses a distilled spec)")
     f.add_argument("--device", required=True, help="Target device name")
+
+    fo = sub.add_parser("forge", help="Turn a plain-language need into a Spec IR")
+    fo.add_argument("description", help="What the model should do, in plain language")
+    fo.add_argument("--out", help="Write the Spec IR here (.json)")
+    fo.add_argument("--offline", action="store_true", help="Answer the offline slot")
+    fo.add_argument("--device", help="Answer the device slot")
+    fo.add_argument("--seed-count", type=int, help="How many real examples exist")
+
+    c = sub.add_parser("compile", help="Compile a Spec IR into a certified cartridge")
+    c.add_argument("--spec", required=True, help="Path to a Spec IR (.json/.yaml)")
+    c.add_argument("--data", help="Training corpus (.jsonl/.csv); builtin if omitted")
+    c.add_argument("--registry", default="./registry", help="Registry base path")
+
+    pr = sub.add_parser("primitives", help="List the supported task primitives")
+
+    fb = sub.add_parser("verify-graph", help="Statically verify a Fabric graph (.json)")
+    fb.add_argument("path")
+    fb.add_argument("--offline", action="store_true", help="Require offline closure")
+    _ = pr
     return p
 
 
@@ -133,6 +152,128 @@ def _cmd_feasibility(args: argparse.Namespace) -> int:
     return 0 if verdict.feasible else 1
 
 
+def _cmd_primitives() -> int:
+    from modelrig.primitives import all_primitives
+
+    print("Supported task primitives (the closed set of eight):")
+    for p in all_primitives():
+        print(f"  {p.primitive.value:<10} seed floor {p.seed_floor:>4}  "
+              f"metric {p.default_metric:<16} min {p.min_params_b}B  — {p.description}")
+    print("\nGAP-06: coverage against real requests is not yet validated.")
+    return 0
+
+
+def _cmd_forge(args: argparse.Namespace) -> int:
+    from modelrig.forge import Forge
+    from modelrig.ir import save_spec_ir
+
+    forge = Forge()
+    state = forge.parse(args.description)
+    answers = {}
+    if args.offline:
+        answers["offline_required"] = True
+    if args.device:
+        answers["device_target"] = args.device
+    if args.seed_count is not None:
+        answers["seed_data_count"] = args.seed_count
+    if answers:
+        state = forge.answer(state, **answers)
+
+    remaining = state.questions()
+    try:
+        spec = forge.to_spec(state)
+    except ValueError as exc:
+        print(f"cannot emit a spec yet: {exc}")
+        return 2
+
+    print(f"spec_hash : {spec.hash}")
+    print(f"primitive : {spec.task_primitive.value}")
+    print(f"device    : {spec.device_target}")
+    print(f"offline   : {spec.offline_required}")
+    print(f"seed data : {spec.seed_data_count}")
+    if remaining:
+        print("\nstill to ask (ranked by information gain):")
+        for q in remaining:
+            print(f"  - {q}")
+    if args.out:
+        save_spec_ir(spec, args.out)
+        print(f"\nwrote {args.out}")
+    return 0
+
+
+def _cmd_compile(args: argparse.Namespace) -> int:
+    from modelrig.datasets import load_dataset
+    from modelrig.ir import load_spec_ir
+    from modelrig.pipeline import MajesticCompiler
+
+    try:
+        spec = load_spec_ir(args.spec)
+    except Exception as exc:  # noqa: BLE001 - report cleanly
+        print(f"error: could not load spec: {exc}")
+        return 2
+
+    corpus = load_dataset(args.data) if args.data else load_dataset("builtin:sentiment")
+    result = MajesticCompiler(base_path=args.registry).compile(spec, corpus)
+
+    print(f"spec_hash : {result.spec.hash}")
+    print(f"admitted  : {result.admitted}")
+    print(f"stage     : {result.stage_reached}")
+    print(f"cache hit : {result.cache_hit}")
+    for gate in result.gates:
+        status = "PASS" if gate.passed else "FAIL"
+        print(f"  [{status}] {gate.gate}")
+        for reason in gate.reasons:
+            print(f"        - {reason}")
+    if result.scorecard:
+        print("scorecard :")
+        for axis in result.scorecard.axes:
+            mark = "ok " if axis.passed else "FAIL"
+            print(f"  [{mark}] {axis.name:<18} {axis.score:.3f} (>= {axis.threshold:.2f})")
+        print(f"  answer-flip rate: {result.scorecard.answer_flip_rate}")
+    if result.cartridge_id:
+        print(f"cartridge : {result.cartridge_id}")
+    if result.refusal:
+        print(f"refused   : {result.refusal}")
+    for suggestion in result.repair_suggestions:
+        print(f"  try: {suggestion}")
+    return 0 if result.admitted else 1
+
+
+def _cmd_verify_graph(args: argparse.Namespace) -> int:
+    import json as _json
+
+    from majestic.fabric import FabricGraph, Node, NodeKind, analyse
+
+    data = _json.loads(pathlib.Path(args.path).read_text(encoding="utf-8-sig"))
+    graph = FabricGraph(data.get("name", "graph"))
+    for node in data.get("nodes", []):
+        graph.add(Node(
+            name=node["name"],
+            kind=NodeKind(node.get("kind", "cartridge")),
+            requires_network=bool(node.get("requires_network", False)),
+            produces_untrusted=bool(node.get("produces_untrusted", False)),
+            privileged=bool(node.get("privileged", False)),
+            ram_mb=float(node.get("ram_mb", 0.0)),
+            cost_usd=float(node.get("cost_usd", 0.0)),
+            metadata=node.get("metadata", {}),
+        ))
+    for src, dst in data.get("edges", []):
+        graph.connect(src, dst)
+
+    result = analyse(graph, offline_required=args.offline)
+    print(f"offline_closed : {result.offline_closed}")
+    print(f"peak_ram_mb    : {result.peak_ram_mb}")
+    print(f"cost_per_req   : ${result.total_cost_usd}")
+    for v in result.violations:
+        print(f"  VIOLATION: {v}")
+    for w in result.warnings:
+        print(f"  warning  : {w}")
+    split = result.suggest_split()
+    if split:
+        print(f"  remedy   : {split}")
+    return 0 if result.ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -144,6 +285,14 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_build(args)
     if args.command == "feasibility":
         return _cmd_feasibility(args)
+    if args.command == "primitives":
+        return _cmd_primitives()
+    if args.command == "forge":
+        return _cmd_forge(args)
+    if args.command == "compile":
+        return _cmd_compile(args)
+    if args.command == "verify-graph":
+        return _cmd_verify_graph(args)
     parser.print_help()
     return 1
 
