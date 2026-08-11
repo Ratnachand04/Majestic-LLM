@@ -19,7 +19,20 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from majestic.fabric import FabricGraph, Node, NodeKind, analyse  # noqa: E402
+from majestic.fabric import (  # noqa: E402
+    FabricGraph,
+    FabricRuntime,
+    Node,
+    NodeKind,
+    analyse,
+    split_offline_core,
+)
+from majestic.serving import (  # noqa: E402
+    AdapterHandle,
+    ServerTopology,
+    device_budget,
+    swap_latency_ms,
+)
 from modelrig.forge import Forge  # noqa: E402
 from modelrig.ir import DataRights, SpecIR  # noqa: E402
 from modelrig.pipeline import MajesticCompiler  # noqa: E402
@@ -88,6 +101,22 @@ def main() -> int:
               f"peft={result.plan.peft_method} "
               f"quant={result.plan.quantiser}/{result.plan.bit_width} "
               f"target={result.plan.target}  ~${result.plan.budget_usd}")
+        print(f"rule      : {result.plan.provenance.get('rule')}")
+
+    # --- Acts 5-6: candidates trained in parallel, then one is chosen ---- #
+    if result.selection and result.selection.candidates:
+        rule("ACT 5-6  CANDIDATES — train in parallel, score both, pick one")
+        for row in result.selection.comparison_table():
+            mark = "<- winner" if row["winner"] else ""
+            print(f"  {row['base']:<40} {row['params_b']:>5}B  "
+                  f"score {row['score']:.3f}  {row['latency_ms']:>7.1f}ms  {mark}")
+        print(f"\n  rationale: {result.selection.rationale}")
+    if result.quantisation:
+        q = result.quantisation
+        print(f"\n  quantisation: {q['quantiser']}/{q['bit_width']} "
+              f"flip={q['answer_flip_rate']} "
+              f"calibrated on {q['calibration_size']} customer samples "
+              f"(on-distribution={q['calibration_on_distribution']})")
 
     # --- Act 9: the scorecard is what is sold ---------------------------- #
     rule("ACT 9  THE SCORECARD — what the customer actually receives")
@@ -151,6 +180,50 @@ def main() -> int:
     for v in analysis.violations:
         print(f"    VIOLATION: {v}")
     print(f"    remedy   : {analysis.suggest_split()}")
+
+    # --- the runtime the cartridge lands in ------------------------------ #
+    rule("B-09  DEVICE BUDGET — twenty specialists on one 4 GB tablet")
+    budget = device_budget(total_gb=4.0, base_params_b=1.7, context_length=2048,
+                           n_adapters=20)
+    for label, gb in budget.as_table():
+        print(f"  {label:<40} {gb:>6.2f} GB")
+    print(f"  {'headroom':<40} {budget.headroom_gb:>6.2f} GB")
+    print("\n  Twenty specialists cost 0.59 GB because they SHARE the one "
+          "resident base.")
+    print(f"  Swap latency ~{swap_latency_ms(1)['assumed_ms_per_swap']:.0f}ms "
+          "per adapter — UNMEASURED (GAP-10).")
+
+    rule("A-04  SERVING — one GPU, many tenants, and what breaks it")
+    topo = ServerTopology(base_ref="Qwen/Qwen3-1.7B")
+    print(f"  tenants per A100        : {topo.max_tenants()}")
+    mixed = [AdapterHandle(f"t{i}", "Qwen/Qwen3-1.7B") for i in range(3)]
+    mixed.append(AdapterHandle("t9", "meta-llama/Llama-3.2-1B-Instruct"))
+    out = topo.batch(mixed)
+    print(f"  batched in one kernel   : {out['batched']}")
+    print(f"  rejected (wrong base)   : {out['rejected_wrong_base']}  "
+          "<- customers on different bases cannot share a GPU")
+    print(f"  {topo.pool.fragmentation_report()['note']}")
+
+    # --- the graph now RUNS, not just analyses --------------------------- #
+    rule("B-10  FABRIC RUNTIME — the offline core actually executes")
+    core, tail = split_offline_core(graph)
+    print(f"  offline core : {core}")
+    print(f"  online tail  : {tail}")
+    core_graph = FabricGraph("offline-core")
+    for name in core:
+        core_graph.add(graph.nodes[name])
+    for src, dst in graph.edges:
+        if src in core and dst in core:
+            core_graph.connect(src, dst)
+    runtime = FabricRuntime(
+        core_graph,
+        {"req-extractor": lambda x, c: f"{x}|fields",
+         "urgency-classifier": lambda x, c: f"{x}|urgent"},
+        offline=True,
+    )
+    run = runtime.run("lab form scan")
+    print(f"  ran offline  : ok={run.ok} output={run.output!r} "
+          f"in {run.total_ms:.1f}ms")
 
     print(f"\nartefacts written to {workdir}")
     return 0
