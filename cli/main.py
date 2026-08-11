@@ -51,6 +51,18 @@ def build_parser() -> argparse.ArgumentParser:
     fb = sub.add_parser("verify-graph", help="Statically verify a Fabric graph (.json)")
     fb.add_argument("path")
     fb.add_argument("--offline", action="store_true", help="Require offline closure")
+
+    va = sub.add_parser(
+        "validate", help="Check model compatibility and architecture conformance"
+    )
+    va.add_argument("--warnings", action="store_true", help="Also print warnings")
+
+    bg = sub.add_parser("budget", help="Compute an on-device RAM budget")
+    bg.add_argument("--device", default="android_tablet_4gb")
+    bg.add_argument("--ram-gb", type=float, default=4.0)
+    bg.add_argument("--base-params-b", type=float, default=1.7)
+    bg.add_argument("--context", type=int, default=2048)
+    bg.add_argument("--adapters", type=int, default=20)
     _ = pr
     return p
 
@@ -274,6 +286,48 @@ def _cmd_verify_graph(args: argparse.Namespace) -> int:
     return 0 if result.ok else 1
 
 
+def _cmd_validate(args: argparse.Namespace) -> int:
+    from modelrig.conformance import run_all
+
+    report = run_all()
+    summary = report.summary()
+    print(f"checks run : {summary['checks_run']}")
+    print(f"errors     : {summary['errors']}")
+    print(f"warnings   : {summary['warnings']}")
+    for finding in report.errors:
+        print(f"  ERROR [{finding.source or '-'}] {finding.check} "
+              f"({finding.subject}): {finding.detail}")
+    if args.warnings:
+        for finding in report.warnings:
+            print(f"  warn  [{finding.source or '-'}] {finding.check} "
+                  f"({finding.subject}): {finding.detail}")
+    print("RESULT     : " + ("conformant" if report.ok else "NON-CONFORMANT"))
+    return 0 if report.ok else 1
+
+
+def _cmd_budget(args: argparse.Namespace) -> int:
+    from majestic.serving import plan_device_deployment, swap_latency_ms
+
+    budget, problem = plan_device_deployment(
+        base_params_b=args.base_params_b,
+        total_gb=args.ram_gb,
+        context_length=args.context,
+        n_adapters=args.adapters,
+    )
+    print(f"device: {args.device}  ({args.ram_gb} GB total)")
+    for label, gb in budget.as_table():
+        print(f"  {label:<40} {gb:>6.2f} GB")
+    print(f"  {'headroom':<40} {budget.headroom_gb:>6.2f} GB")
+    swap = swap_latency_ms(args.adapters)
+    print(f"\nadapter swap : ~{swap['assumed_ms_per_swap']:.0f} ms each "
+          f"(measured={swap['measured']})")
+    print(f"caveat       : {swap['caveat']}")
+    if problem:
+        print(f"\nPROBLEM: {problem}")
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -293,6 +347,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_compile(args)
     if args.command == "verify-graph":
         return _cmd_verify_graph(args)
+    if args.command == "validate":
+        return _cmd_validate(args)
+    if args.command == "budget":
+        return _cmd_budget(args)
     parser.print_help()
     return 1
 
