@@ -102,12 +102,15 @@ class SpecIR:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SpecIR:
         data = dict(data)
-        if "task_primitive" in data:
-            data["task_primitive"] = TaskPrimitive(str(data["task_primitive"]).lower())
-        if "abstention_policy" in data:
-            data["abstention_policy"] = AbstentionPolicy(str(data["abstention_policy"]).lower())
-        if "data_rights" in data:
-            data["data_rights"] = DataRights(str(data["data_rights"]).lower())
+        # These enums mix in str, so a member is already an instance of the enum
+        # AND of str; coerce only when it is not already the right enum type.
+        for key, enum_cls in (
+            ("task_primitive", TaskPrimitive),
+            ("abstention_policy", AbstentionPolicy),
+            ("data_rights", DataRights),
+        ):
+            if key in data and not isinstance(data[key], enum_cls):
+                data[key] = enum_cls(str(data[key]).lower())
         known = set(cls.__dataclass_fields__)
         return cls(**{k: v for k, v in data.items() if k in known})
 
