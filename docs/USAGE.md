@@ -155,6 +155,23 @@ result = Factory(base_path="./registry").build(
 print(result.success, result.eval_report, result.artifact_path)
 ```
 
+## 5b. Validate compatibility and conformance
+
+```bash
+python -m cli.main validate --warnings   # catalogue vs published configs + rules
+python -m cli.main budget --ram-gb 4 --base-params-b 1.7 --adapters 20
+```
+
+`validate` runs two independent checks: whether the catalogue's KV geometry
+matches published model configs (a wrong `n_kv_heads` corrupts every device
+verdict), and whether the code obeys the architecture's own rules. Findings cite
+the diagram they came from. Evidence and the full rule table:
+[conformance.md](conformance.md).
+
+`budget` computes the on-device RAM table line by line — base, KV cache,
+embedder, grammar state, adapters, OS headroom — and exits non-zero when the
+deployment does not fit.
+
 ## 6. Feasibility check
 Will a build fit a device *before* you run it?
 ```bash
