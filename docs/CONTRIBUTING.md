@@ -44,6 +44,21 @@ dependency order:
 - **Honest bounds.** If something can't be implemented, leave a clear
   `NotImplementedError` + `TODO`; never fake outputs or weaken a test to pass.
 
+### Phase 10 — full architecture conformance
+Closed the remaining gaps between the diagrams and the code, and made the
+architecture's rules executable:
+
+| Area | Modules |
+|---|---|
+| Parallel candidates | `modelrig/candidates.py` (score both, pick one) |
+| Quantisation | `modelrig/quantisation.py` (customer-distribution calibration, flip rate, recalibration, SpQR escalation) |
+| Constrained decoding | `modelrig/grammar.py` (GBNF for object/enum/tool-call) |
+| Serving | `majestic/serving.py` (adapter pool, batching, device budget) |
+| Fabric runtime | `majestic/fabric/executor.py` (the DAG runs, not just analysed) |
+| Context assembly | `majestic/retrieval/context.py` (chunk caps, boundary placement) |
+| Constrained tools | `majestic/agent/react.py` |
+| Self-check | `modelrig/conformance.py` + `cli validate` |
+
 ## Rules specific to the compiler
 - **Never let a gate become a warning.** Gates 1/2/3 and the Data Factory's QA
   gates BLOCK. If something should merely warn, put it in `warnings`, not
@@ -58,6 +73,13 @@ dependency order:
   component "fixes itself" without a `FailureReport`.
 - **An LLM proposes; a validator disposes.** No LLM output may reach a GPU
   without passing `gate2_plan_feasibility`.
+- **Encode a rule where it is enforced, then test it.** A rule that lives only in
+  a docstring drifts. If a diagram states a rule, add it to
+  `modelrig/conformance.py` so `cli validate` fails when the code stops obeying
+  it, and cite the diagram in the finding.
+- **Never plan with a theoretical constant when a deployed one exists.** The
+  int4 size constant is the observed on-disk figure, not the pure-4-bit one;
+  the difference is ~18% of every device budget.
 
 ## Extending the system
 - **Add a task primitive:** extend `TaskPrimitive` and `_SPECS` in
