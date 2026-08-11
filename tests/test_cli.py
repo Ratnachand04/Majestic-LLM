@@ -96,6 +96,32 @@ def test_compile_refuses_below_seed_floor(tmp_path: Path, capsys):
     assert "FAIL" in out and "seed data" in out
 
 
+def test_validate_command(capsys):
+    """Model compatibility + architecture conformance must both be clean."""
+    assert main(["validate"]) == 0
+    out = capsys.readouterr().out
+    assert "RESULT     : conformant" in out
+    assert "errors     : 0" in out
+
+
+def test_validate_shows_warnings_on_request(capsys):
+    assert main(["validate", "--warnings"]) == 0
+    assert "logit_kd_reachable" in capsys.readouterr().out
+
+
+def test_budget_command_prints_the_b09_table(capsys):
+    assert main(["budget"]) == 0
+    out = capsys.readouterr().out
+    assert "Base model" in out and "KV cache" in out
+    assert "Total committed" in out
+    assert "measured=False" in out          # GAP-10 is never hidden
+
+
+def test_budget_command_fails_when_over(capsys):
+    assert main(["budget", "--base-params-b", "8", "--ram-gb", "4"]) == 1
+    assert "PROBLEM" in capsys.readouterr().out
+
+
 def test_verify_graph_command(tmp_path: Path, capsys):
     graph = tmp_path / "graph.json"
     graph.write_text(json.dumps({
