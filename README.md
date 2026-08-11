@@ -27,11 +27,12 @@ customer owns.
 ```bash
 uv venv --python 3.12 .venv && uv pip install -e '.[api,dev]'
 python demo/run_compiler_demo.py     # the ten-act worked example, end to end
-python demo/run_demo.py              # the compound runtime, end to end
+python -m cli.main validate          # model compatibility + architecture conformance
+python -m cli.main budget            # the B-09 device RAM budget, computed
 pytest                               # green offline: no network, no GPU
-python -m cli.main primitives        # the closed set of eight
 ```
-Full walkthrough: [docs/USAGE.md](docs/USAGE.md).
+Full walkthrough: [docs/USAGE.md](docs/USAGE.md). Conformance evidence:
+[docs/conformance.md](docs/conformance.md).
 
 ## The compiler
 ```
@@ -62,10 +63,20 @@ stage    : gate1  (no planning, no data, no GPU)
 ```
 
 ## What is actually enforced
+- **The largest base that fits at 4-bit** — never a smaller base at higher
+  precision. Under a fixed RAM budget that is the k-bit scaling law's verdict.
 - **Memory is weights + KV cache + runtime**, never weights alone. Free RAM must
   be ≥ 2× the model file, which is why a 4 GB phone tops out near 1.7B at 4-bit.
+- **MoE is excluded from constrained devices.** Sparse activation is not sparse
+  residency: 30B must be held to activate 3B.
+- **Candidates are trained in parallel and one is chosen.** The largest base that
+  fits RAM may still break the latency budget, and the budget is a contract.
 - **Answer-flip rate**, not just accuracy. A quantised model can hold identical
-  aggregate accuracy while changing a large share of individual answers.
+  aggregate accuracy while changing a large share of individual answers. The
+  quantiser is calibrated on the customer's own distribution and confidence is
+  recalibrated afterwards.
+- **A compiled grammar, not a hopeful prompt.** Schema violation is impossible
+  rather than unlikely.
 - **The licence chain is solved, not assumed.** Closed-API teacher outputs are
   refused outright; base, teacher, data rights and jurisdiction compose into an
   artefact licence or a refusal.
@@ -89,14 +100,19 @@ majestic-llm/
 │   ├── gates.py                    Gate 1/2/3 — checked before any GPU
 │   ├── primitives.py · catalogue.py · licence.py   (the closed set, parts, legal)
 │   ├── forge.py · planner.py       front end + optimisation passes
+│   ├── candidates.py               parallel builds → score both → pick one
 │   ├── data_factory.py · proving_ground.py   amplification + the seven axes
+│   ├── quantisation.py · grammar.py   calibration, flip rate, constrained decoding
 │   ├── cartridge.py · registry.py  content-addressed artefacts + lineage
 │   ├── feasibility.py              KV-cache-aware device predictor
-│   ├── pipeline.py                 end to end
+│   ├── conformance.py              model compatibility + architecture self-check
+│   ├── pipeline.py                 end to end, with the repair loop
 │   └── buildspec · compiler · planes · classifier · datasets · training_hf
 ├── majestic/                       ← the compound runtime
 │   ├── orchestrator.py · factory.py   request lifecycle + assembly
-│   ├── fabric/                     typed DAG + offline-closure static analyser
+│   ├── fabric/     graph · analyser · executor   (typed DAG that runs)
+│   ├── serving.py                  adapter pool, batching, device RAM budget
+│   ├── agent/react.py              ReAct with a constrained tool-call schema
 │   ├── router/     rule_router · deferral   (capability routing, learned deferral)
 │   ├── flywheel.py                 corrections → KTO signal → rebuild-if-wins
 │   ├── core · perception · experts · retrieval · verification · representation
