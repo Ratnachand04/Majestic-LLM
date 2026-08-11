@@ -126,11 +126,24 @@ def test_long_context_can_flip_a_fitting_model_to_infeasible():
     assert engine.evaluate(huge_ctx).feasible is False
 
 
-def test_four_bit_is_about_055gb_per_billion_params():
-    """The size ladder from A-01: 1.7B at 4-bit is ~1.1 GB on disk."""
+def test_four_bit_weights_match_the_published_size_ladder():
+    """A-01 size ladder: 1.7B at 4-bit is ~1.1 GB on disk.
+
+    Deployed int4 costs ~0.65 GB/B, not the theoretical 0.55: mixed-precision
+    schemes keep embeddings and some tensors wider. Budgeting with the
+    theoretical figure under-counts every footprint by ~18%.
+    """
     p = HeuristicPerfPredictor()
     est = p.predict("Qwen/Qwen3-1.7B", "int4", "gguf", PHONE)
-    assert 900 < est.weights_mb < 1100
+    assert 1050 < est.weights_mb < 1150     # ~1.1 GB, per the ladder
+
+
+@pytest.mark.parametrize("params_b,disk_gb", [(0.6, 0.4), (1.7, 1.1), (3.4, 2.2)])
+def test_size_ladder_is_reproduced_across_the_range(params_b, disk_gb):
+    from modelrig.catalogue import BYTES_PER_PARAM
+
+    predicted = params_b * BYTES_PER_PARAM["int4"]
+    assert abs(predicted - disk_gb) / disk_gb < 0.20
 
 
 def test_two_times_file_size_rule_caps_the_device():
