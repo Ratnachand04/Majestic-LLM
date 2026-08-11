@@ -172,4 +172,6 @@ def test_gate3_refuses_licence_that_does_not_permit_release():
 
 
 def test_catalogue_is_narrow_by_design():
-    assert len(DEFAULT_CATALOGUE.bases) == 6
+    """Six deployable dense bases (B-02); extra bases fragment serving (A-04)."""
+    dense = [b for b in DEFAULT_CATALOGUE.bases if not b.is_moe]
+    assert len(dense) == 6
