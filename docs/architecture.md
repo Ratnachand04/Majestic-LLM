@@ -57,6 +57,21 @@ Every gate is checked **before** any GPU is spent. An infeasible plan caught at
 Gate 2 costs nothing; caught after training it costs sixty dollars. **A refusal
 in eight seconds is a better product than a failed build in ninety minutes.**
 
+## The runtime topology (A-04, B-09)
+
+One architecture, two deployment shapes, sharing the cartridge format —
+[`majestic/serving.py`](../majestic/serving.py).
+
+**Server tier.** One base resident in VRAM, an adapter pool paged on demand with
+tier-driven eviction, and requests using different adapters batched together.
+`AdapterPool.fragmentation_report()` makes the constraint concrete: customers on
+different bases cannot share a GPU, which is why the catalogue stays narrow.
+
+**Device tier.** The B-09 budget is computed, not asserted, and reproduces the
+published table exactly (3.47 GB on a 4 GB tablet). Twenty specialists cost
+0.59 GB because they share the one resident base. Run it with
+`python -m cli.main budget`.
+
 ## The compound runtime (majestic/)
 
 The inference-side system that a cartridge runs inside:
@@ -69,8 +84,11 @@ The inference-side system that a cartridge runs inside:
 | **Learned deferral** | `majestic/router/deferral.py` | quality-gap routing, offline hard-lock |
 | Expert & tool pool | `majestic/experts/` | web, code-exec, classifier real; diffusion/world-model stubs |
 | Retrieval & memory | `majestic/retrieval/` | in-memory cosine; FAISS optional |
+| **Context assembly** | `majestic/retrieval/context.py` | chunk caps + boundary placement (A-06) |
 | Verifier | `majestic/verification/` | schema, code, math, factuality |
-| **Fabric** | `majestic/fabric/` | typed DAG + static analyser |
+| **Fabric** | `majestic/fabric/` | typed DAG, static analyser **and runtime** |
+| **Constrained tools** | `majestic/agent/react.py` | ReAct with a grammar-constrained call schema |
+| **Serving** | `majestic/serving.py` | adapter pool, batching, device budget |
 | **Flywheel** | `majestic/flywheel.py` | corrections → KTO signal → rebuild-if-wins |
 
 ## Load-bearing constraints from the prior art
