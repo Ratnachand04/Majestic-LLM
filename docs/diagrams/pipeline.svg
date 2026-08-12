@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 330" width="1200" height="330"
+     role="img" aria-label="The Majestic compile pipeline: customer to FORGE to Spec IR through three verification gates to a certified cartridge.">
+  <title>Majestic — the compile pipeline and its three gates</title>
+  <desc>A plain-language request enters FORGE, becomes a hash-addressed Spec IR, passes Gate 1 spec
+  admissibility, is compiled by the PLANNER through Gate 2 plan feasibility, built and proven through
+  Gate 3 artefact certification, and admitted to the registry as a certified cartridge.</desc>
+
+  <style>
+    :root{
+      --bg:#ffffff; --panel:#f7f8fa; --ink:#16202e; --muted:#5b6779; --rule:#d8dee8;
+      --maj:#e8562a; --majBg:#fdf0ea; --gate:#c62026; --gateBg:#fdecec;
+      --dark:#0f1723; --ok:#1b7f4b; --okBg:#eaf6ef; --ext:#8a94a6; --extBg:#f1f3f6;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0d1117; --panel:#141b25; --ink:#e8edf5; --muted:#9aa7ba; --rule:#2a3442;
+        --majBg:#3a1c10; --gateBg:#3a1416; --dark:#e8edf5; --okBg:#0f2a1c; --extBg:#1b2430;
+      }
+      .darkbox{ fill:#e8edf5; }
+      .darkbox-t{ fill:#0d1117; }
+    }
+    .bg{ fill:var(--bg); }
+    .lane{ fill:var(--panel); stroke:var(--rule); stroke-width:1; }
+    .t{ font-family:'Segoe UI',Inter,system-ui,-apple-system,sans-serif; }
+    .h{ font-size:14px; font-weight:700; fill:var(--ink); }
+    .s{ font-size:10.5px; fill:var(--muted); }
+    .k{ font-size:9px; font-weight:700; letter-spacing:.9px; }
+    .cap{ font-size:11px; fill:var(--muted); }
+    .box{ rx:9; ry:9; stroke-width:2; }
+    .maj{ fill:var(--majBg); stroke:var(--maj); }
+    .gt{ fill:var(--gateBg); stroke:var(--gate); }
+    .ok{ fill:var(--okBg); stroke:var(--ok); }
+    .ext{ fill:var(--extBg); stroke:var(--ext); stroke-width:1.5; }
+    .darkbox{ fill:var(--dark); stroke:var(--dark); }
+    .darkbox-t{ fill:#ffffff; }
+    .link{ stroke:var(--rule); stroke-width:2; fill:none; marker-end:url(#ah); }
+    .drop{ stroke:var(--gate); stroke-width:1.6; fill:none; stroke-dasharray:4 4; opacity:.75; }
+
+    /* the request travelling down the pipeline */
+    .spark{ fill:var(--maj); }
+    /* gates breathing, staggered so the eye follows the order they fire in */
+    .pulse{ transform-origin:center; }
+    @keyframes glow{ 0%,100%{ opacity:.25 } 50%{ opacity:.9 } }
+    .g1{ animation:glow 4s ease-in-out infinite; }
+    .g2{ animation:glow 4s ease-in-out infinite .6s; }
+    .g3{ animation:glow 4s ease-in-out infinite 1.2s; }
+    @keyframes dash{ to{ stroke-dashoffset:-16 } }
+    .drop{ animation:dash 1.4s linear infinite; }
+  </style>
+
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--rule)"/>
+    </marker>
+    <!-- the path the request follows, reused by every travelling dot -->
+    <path id="flow" d="M100 102 H1110"/>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="330"/>
+  <rect class="lane" x="14" y="34" width="1172" height="106" rx="12"/>
+
+  <text class="t k" x="24" y="24" fill="var(--maj)">THE COMPILE PIPELINE — A MODEL COMPILER, NOT A MODEL</text>
+  <text class="t k" x="24" y="204" fill="var(--gate)">VERIFICATION GATES — EVERY ONE CHECKED BEFORE ANY GPU IS SPENT</text>
+
+  <!-- ── main flow ─────────────────────────────────────────────── -->
+  <g class="t">
+    <rect class="box ext" x="24"   y="62" width="150" height="80"/>
+    <text class="h" x="99"  y="94"  text-anchor="middle">Customer</text>
+    <text class="s" x="99"  y="112" text-anchor="middle">plain language</text>
+    <text class="s" x="99"  y="126" text-anchor="middle">no ML vocabulary</text>
+
+    <rect class="box maj" x="194"  y="62" width="150" height="80"/>
+    <text class="k" x="269" y="80"  text-anchor="middle" fill="var(--maj)">SUBSYSTEM 1</text>
+    <text class="h" x="269" y="100" text-anchor="middle">FORGE</text>
+    <text class="s" x="269" y="118" text-anchor="middle">typed slot schema</text>
+    <text class="s" x="269" y="132" text-anchor="middle">four questions, not forty</text>
+
+    <rect class="box darkbox" x="364" y="62" width="150" height="80"/>
+    <text class="k darkbox-t" x="439" y="80" text-anchor="middle" opacity=".7">THE PIVOT</text>
+    <text class="h darkbox-t" x="439" y="100" text-anchor="middle">SPEC IR</text>
+    <text class="darkbox-t" font-size="10.5" x="439" y="118" text-anchor="middle" opacity=".75">hash-addressed</text>
+    <text class="darkbox-t" font-size="10.5" x="439" y="132" text-anchor="middle" opacity=".75">the single contract</text>
+
+    <rect class="box maj" x="534"  y="62" width="150" height="80"/>
+    <text class="k" x="609" y="80"  text-anchor="middle" fill="var(--maj)">SUBSYSTEM 2</text>
+    <text class="h" x="609" y="100" text-anchor="middle">PLANNER</text>
+    <text class="s" x="609" y="118" text-anchor="middle">largest base that fits</text>
+    <text class="s" x="609" y="132" text-anchor="middle">deterministic first</text>
+
+    <rect class="box maj" x="704"  y="62" width="150" height="80"/>
+    <text class="k" x="779" y="80"  text-anchor="middle" fill="var(--maj)">SUBSYSTEMS 3-4</text>
+    <text class="h" x="779" y="100" text-anchor="middle">DATA + TRAINER</text>
+    <text class="s" x="779" y="118" text-anchor="middle">locked held-out split</text>
+    <text class="s" x="779" y="132" text-anchor="middle">parallel candidates</text>
+
+    <rect class="box maj" x="874"  y="62" width="150" height="80"/>
+    <text class="k" x="949" y="80"  text-anchor="middle" fill="var(--maj)">SUBSYSTEM 5</text>
+    <text class="h" x="949" y="100" text-anchor="middle">PROVING GROUND</text>
+    <text class="s" x="949" y="118" text-anchor="middle">seven axes, all pass</text>
+    <text class="s" x="949" y="132" text-anchor="middle">answer-flip measured</text>
+
+    <rect class="box ok"  x="1044" y="62" width="142" height="80"/>
+    <text class="k" x="1115" y="80" text-anchor="middle" fill="var(--ok)">WHAT IS SOLD</text>
+    <text class="h" x="1115" y="100" text-anchor="middle">CARTRIDGE</text>
+    <text class="s" x="1115" y="118" text-anchor="middle">+ a scorecard</text>
+    <text class="s" x="1115" y="132" text-anchor="middle">certified, licensed</text>
+  </g>
+
+  <!-- connectors -->
+  <g>
+    <path class="link" d="M174 102 H190"/>
+    <path class="link" d="M344 102 H360"/>
+    <path class="link" d="M514 102 H530"/>
+    <path class="link" d="M684 102 H700"/>
+    <path class="link" d="M854 102 H870"/>
+    <path class="link" d="M1024 102 H1040"/>
+  </g>
+
+  <!-- travelling requests: three staggered so the pipeline always looks live -->
+  <g>
+    <circle class="spark" r="5" opacity=".95">
+      <animateMotion dur="7s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1" calcMode="linear">
+        <mpath href="#flow"/>
+      </animateMotion>
+    </circle>
+    <circle class="spark" r="4" opacity=".55">
+      <animateMotion dur="7s" begin="2.3s" repeatCount="indefinite">
+        <mpath href="#flow"/>
+      </animateMotion>
+    </circle>
+    <circle class="spark" r="3" opacity=".35">
+      <animateMotion dur="7s" begin="4.6s" repeatCount="indefinite">
+        <mpath href="#flow"/>
+      </animateMotion>
+    </circle>
+  </g>
+
+  <!-- ── gates ─────────────────────────────────────────────────── -->
+  <path class="drop" d="M439 142 V218"/>
+  <path class="drop" d="M609 142 V218"/>
+  <path class="drop" d="M949 142 V218"/>
+
+  <g class="t">
+    <rect class="box gt g1 pulse" x="330" y="218" width="218" height="74"/>
+    <text class="k" x="439" y="238" text-anchor="middle" fill="var(--gate)">GATE 1 — SPEC ADMISSIBILITY</text>
+    <text class="s" x="439" y="256" text-anchor="middle">primitive in the set of eight?</text>
+    <text class="s" x="439" y="270" text-anchor="middle">seed floor met? data rights?</text>
+    <text class="s" x="439" y="284" text-anchor="middle">quality bar reachable on this device?</text>
+
+    <rect class="box gt g2 pulse" x="562" y="218" width="218" height="74"/>
+    <text class="k" x="671" y="238" text-anchor="middle" fill="var(--gate)">GATE 2 — PLAN FEASIBILITY</text>
+    <text class="s" x="671" y="256" text-anchor="middle">fits RAM WITH the KV cache?</text>
+    <text class="s" x="671" y="270" text-anchor="middle">tokenizer identity? offline closure?</text>
+    <text class="s" x="671" y="284" text-anchor="middle">licence chain composes? in budget?</text>
+
+    <rect class="box gt g3 pulse" x="840" y="218" width="218" height="74"/>
+    <text class="k" x="949" y="238" text-anchor="middle" fill="var(--gate)">GATE 3 — CERTIFICATION</text>
+    <text class="s" x="949" y="256" text-anchor="middle">passed on REAL held-out data?</text>
+    <text class="s" x="949" y="270" text-anchor="middle">re-evaluated after quantisation?</text>
+    <text class="s" x="949" y="284" text-anchor="middle">regression, safety, privacy clean?</text>
+  </g>
+
+  <text class="t cap" x="24" y="313">
+    A refusal in eight seconds is a better product than a failed build in ninety minutes.
+  </text>
+  <text class="t cap" x="1186" y="313" text-anchor="end" opacity=".75">B-01 · B-03</text>
+</svg>
