@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400"
+     role="img" aria-label="On-device memory budget: weights plus KV cache plus runtime must fit device free RAM. The KV cache grows with context length and is the usual cause of on-device out-of-memory.">
+  <title>Majestic — the on-device memory budget, and the term nobody budgets for</title>
+  <desc>A 4 GB Android tablet running a 1.7B base at 4-bit. Weights, embedder, runtime, twenty shared
+  adapters and OS headroom are fixed; the KV cache grows linearly with context length. At long context
+  the total crosses device free RAM and the deployment no longer fits.</desc>
+
+  <style>
+    :root{
+      --bg:#ffffff; --panel:#f7f8fa; --ink:#16202e; --muted:#5b6779; --rule:#d8dee8;
+      --maj:#e8562a; --majBg:#fdf0ea; --gate:#c62026; --gateBg:#fdecec;
+      --prior:#2a5caa; --priorBg:#eaf0fb; --ext:#8a94a6; --extBg:#eef1f5;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0d1117; --panel:#141b25; --ink:#e8edf5; --muted:#9aa7ba; --rule:#2a3442;
+        --majBg:#3a1c10; --gateBg:#3a1416; --priorBg:#14243d; --extBg:#1b2430;
+      }
+    }
+    .bg{ fill:var(--bg); }
+    .t{ font-family:'Segoe UI',Inter,system-ui,-apple-system,sans-serif; }
+    .h{ font-size:14px; font-weight:700; fill:var(--ink); }
+    .s{ font-size:10.5px; fill:var(--muted); }
+    .k{ font-size:9px; font-weight:700; letter-spacing:.9px; }
+    .cap{ font-size:11px; fill:var(--muted); }
+    .lab{ font-size:10px; fill:var(--ink); }
+    .seg{ rx:3; ry:3; stroke-width:1.5; }
+    .fixed{ fill:var(--priorBg); stroke:var(--prior); }
+    .adapters{ fill:var(--majBg); stroke:var(--maj); }
+    .os{ fill:var(--extBg); stroke:var(--ext); }
+    .kv{ fill:var(--gateBg); stroke:var(--gate); stroke-width:2; }
+    .limit{ stroke:var(--gate); stroke-width:2.5; stroke-dasharray:6 4; }
+    .tick{ stroke:var(--rule); stroke-width:1; }
+    .ladder{ rx:6; ry:6; stroke-width:1.5; fill:var(--panel); stroke:var(--rule); }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="1200" height="400"/>
+
+  <text class="t k" x="40" y="30" fill="var(--gate)">WHERE THE MEMORY GOES — WEIGHTS + KV CACHE + RUNTIME MUST FIT DEVICE FREE RAM</text>
+  <text class="t h" x="40" y="58">4 GB Android tablet · Qwen3-1.7B at 4-bit · twenty resident adapters</text>
+  <text class="t s" x="40" y="76">225 px per GB. Every segment is computed, not asserted — change the context and the bar moves.</text>
+
+  <!-- axis -->
+  <g>
+    <line class="tick" x1="40"  y1="104" x2="40"  y2="182"/>
+    <line class="tick" x1="265" y1="168" x2="265" y2="182"/>
+    <line class="tick" x1="490" y1="168" x2="490" y2="182"/>
+    <line class="tick" x1="715" y1="168" x2="715" y2="182"/>
+    <text class="t s" x="40"  y="196">0 GB</text>
+    <text class="t s" x="265" y="196" text-anchor="middle">1 GB</text>
+    <text class="t s" x="490" y="196" text-anchor="middle">2 GB</text>
+    <text class="t s" x="715" y="196" text-anchor="middle">3 GB</text>
+    <text class="t s" x="940" y="196" text-anchor="middle" fill="var(--gate)">4 GB — device free RAM</text>
+  </g>
+
+  <!-- the bar -->
+  <g>
+    <!-- fixed: base weights -->
+    <rect class="seg fixed" x="40" y="110" width="247.5" height="54"/>
+    <text class="t lab" x="46" y="132">Base model</text>
+    <text class="t s"   x="46" y="148">1.10 GB · resident once</text>
+
+    <!-- the variable one -->
+    <rect class="seg kv" x="287.5" y="110" height="54" width="49.5">
+      <animate attributeName="width"
+               values="49.5;49.5;200;200;49.5" keyTimes="0;0.15;0.5;0.78;1"
+               dur="9s" repeatCount="indefinite" calcMode="spline"
+               keySplines="0 0 1 1;.4 0 .2 1;0 0 1 1;.4 0 .2 1"/>
+    </rect>
+
+    <!-- everything after the KV cache is pushed along as it grows -->
+    <g>
+      <animateTransform attributeName="transform" type="translate"
+                        values="0,0;0,0;150.5,0;150.5,0;0,0" keyTimes="0;0.15;0.5;0.78;1"
+                        dur="9s" repeatCount="indefinite" calcMode="spline"
+                        keySplines="0 0 1 1;.4 0 .2 1;0 0 1 1;.4 0 .2 1"/>
+      <rect class="seg fixed"    x="337"   y="110" width="20.25" height="54"/>
+      <rect class="seg fixed"    x="357.3" y="110" width="13.5"  height="54"/>
+      <rect class="seg adapters" x="370.8" y="110" width="135"   height="54"/>
+      <rect class="seg os"       x="505.8" y="110" width="315"   height="54"/>
+      <text class="t lab" x="378" y="132">20 adapters</text>
+      <text class="t s"   x="378" y="148">0.60 GB · shared base</text>
+      <text class="t lab" x="513" y="132">Application and OS headroom</text>
+      <text class="t s"   x="513" y="148">1.40 GB</text>
+    </g>
+
+    <!-- the free-RAM ceiling -->
+    <line class="limit" x1="940" y1="96" x2="940" y2="178"/>
+  </g>
+
+  <!-- KV callout -->
+  <g>
+    <text class="t k" x="292" y="228" fill="var(--gate)">GROWS AT RUNTIME</text>
+    <text class="t h" x="292" y="248">KV cache</text>
+    <text class="t s" x="292" y="266">Linear in context length and batch. The variable nobody</text>
+    <text class="t s" x="292" y="280">budgets for, and the usual cause of on-device OOM.</text>
+    <text class="t s" x="292" y="300" fill="var(--gate)" font-weight="700">
+      <tspan>context 2,048 → 0.22 GB</tspan>
+      <animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.28;0.42;0.86;1"
+               dur="9s" repeatCount="indefinite"/>
+    </text>
+    <text class="t s" x="292" y="300" fill="var(--gate)" font-weight="700" opacity="0">
+      <tspan>context 16,384 → 0.89 GB</tspan>
+      <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.42;0.5;0.78;0.86"
+               dur="9s" repeatCount="indefinite"/>
+    </text>
+    <path d="M330 214 V172" stroke="var(--gate)" stroke-width="1.5" fill="none" marker-end="url(#a4)"/>
+  </g>
+
+  <defs>
+    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--gate)"/>
+    </marker>
+  </defs>
+
+  <!-- the moment it stops fitting -->
+  <g opacity="0">
+    <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.45;0.56;0.78;0.84"
+             dur="9s" repeatCount="indefinite"/>
+    <rect x="700" y="214" width="470" height="52" rx="8" fill="var(--gateBg)" stroke="var(--gate)" stroke-width="2"/>
+    <text class="t h" x="716" y="236" fill="var(--gate)">OVER BUDGET — the build is refused, not shipped</text>
+    <text class="t s" x="716" y="254">Gate 2 fails before a GPU is allocated. Cost of catching it here: nothing.</text>
+  </g>
+
+  <!-- size ladder -->
+  <text class="t k" x="40" y="330" fill="var(--prior)">SIZE LADDER AT 4-BIT — DEPLOYED, ~0.65 GB PER BILLION PARAMETERS</text>
+  <g class="t">
+    <rect class="ladder" x="40"  y="342" width="270" height="40"/>
+    <text class="h" x="54"  y="360" font-size="12.5">0.6B · ~0.4 GB</text>
+    <text class="s" x="54"  y="375">3 GB RAM tier</text>
+
+    <rect class="ladder" x="326" y="342" width="270" height="40"/>
+    <text class="h" x="340" y="360" font-size="12.5">1.7B · ~1.1 GB</text>
+    <text class="s" x="340" y="375">4-6 GB RAM tier</text>
+
+    <rect class="ladder" x="612" y="342" width="270" height="40"/>
+    <text class="h" x="626" y="360" font-size="12.5">3-4B · ~2.2 GB</text>
+    <text class="s" x="626" y="375">8 GB tier</text>
+
+    <rect class="ladder" x="898" y="342" width="272" height="40" stroke="var(--gate)"/>
+    <text class="h" x="912" y="360" font-size="12.5">7-8B · ~4.5 GB</text>
+    <text class="s" x="912" y="375">16 GB laptop only</text>
+  </g>
+</svg>
