@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320"
+     role="img" aria-label="The Majestic flywheel: field corrections queue locally, sync, train with KTO, rebuild, and a new version is offered only if it wins.">
+  <title>Majestic — the flywheel, the only permanent moat</title>
+  <desc>Staff corrections are captured with no labelling effort, queued locally inside the offline
+  guarantee, consumed as unpaired binary signal by KTO, used to rebuild against a held-out set that has
+  grown with real data, and the next version is offered only if it beats the incumbent.</desc>
+
+  <style>
+    :root{
+      --bg:#ffffff; --panel:#f7f8fa; --ink:#16202e; --muted:#5b6779; --rule:#d8dee8;
+      --maj:#e8562a; --majBg:#fdf0ea; --ok:#1b7f4b; --okBg:#eaf6ef;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0d1117; --panel:#141b25; --ink:#e8edf5; --muted:#9aa7ba; --rule:#2a3442;
+        --majBg:#3a1c10; --okBg:#0f2a1c;
+      }
+    }
+    .bg{ fill:var(--bg); }
+    .t{ font-family:'Segoe UI',Inter,system-ui,-apple-system,sans-serif; }
+    .h{ font-size:13.5px; font-weight:700; fill:var(--ink); }
+    .s{ font-size:10.5px; fill:var(--muted); }
+    .n{ font-size:19px; font-weight:800; fill:var(--maj); opacity:.35; }
+    .k{ font-size:9px; font-weight:700; letter-spacing:.9px; }
+    .cap{ font-size:11px; fill:var(--muted); }
+    .box{ rx:9; ry:9; stroke-width:2; fill:var(--majBg); stroke:var(--maj); }
+    .win{ fill:var(--okBg); stroke:var(--ok); }
+    .link{ stroke:var(--rule); stroke-width:2; fill:none; marker-end:url(#a2); }
+    .ret{ stroke:var(--maj); stroke-width:2.2; fill:none; stroke-dasharray:9 7; marker-end:url(#a3); }
+
+    /* the wheel turning: each stage lights in sequence, then the loop closes */
+    @keyframes lift{
+      0%,100%{ opacity:.999; filter:none }
+      50%    { opacity:.999 }
+    }
+    @keyframes ring{
+      0%,72%,100%{ stroke-width:2;   opacity:.55 }
+      12%        { stroke-width:3.4; opacity:1    }
+    }
+    .r1{ animation:ring 7.5s ease-in-out infinite      ; }
+    .r2{ animation:ring 7.5s ease-in-out infinite 1.1s ; }
+    .r3{ animation:ring 7.5s ease-in-out infinite 2.2s ; }
+    .r4{ animation:ring 7.5s ease-in-out infinite 3.3s ; }
+    .r5{ animation:ring 7.5s ease-in-out infinite 4.4s ; }
+    @keyframes travel{ to{ stroke-dashoffset:-320 } }
+    .ret{ animation:travel 6s linear infinite; }
+  </style>
+
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--rule)"/>
+    </marker>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--maj)"/>
+    </marker>
+    <path id="loop" d="M1075 168 C1135 168 1168 196 1168 220 C1168 248 1130 262 1075 262 H125 C70 262 32 248 32 220 C32 196 65 168 125 168"/>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1200" height="320"/>
+  <text class="t k" x="24" y="26" fill="var(--maj)">THE FLYWHEEL — THE ONLY PART THAT COMPOUNDS</text>
+
+  <g class="t">
+    <rect class="box r1" x="24"  y="48" width="212" height="104"/>
+    <text class="n" x="42"  y="76">01</text>
+    <text class="h" x="42"  y="100">Field correction</text>
+    <text class="s" x="42"  y="119">Staff fix a field or press</text>
+    <text class="s" x="42"  y="134">thumbs-down. No labelling effort.</text>
+
+    <rect class="box r2" x="256" y="48" width="212" height="104"/>
+    <text class="n" x="274" y="76">02</text>
+    <text class="h" x="274" y="100">Queue locally</text>
+    <text class="s" x="274" y="119">Syncs when online — works</text>
+    <text class="s" x="274" y="134">inside the offline guarantee.</text>
+
+    <rect class="box r3" x="488" y="48" width="212" height="104"/>
+    <text class="n" x="506" y="76">03</text>
+    <text class="h" x="506" y="100">KTO on binary signal</text>
+    <text class="s" x="506" y="119">Thumbs up and down is exactly</text>
+    <text class="s" x="506" y="134">the unpaired data KTO consumes.</text>
+
+    <rect class="box r4" x="720" y="48" width="212" height="104"/>
+    <text class="n" x="738" y="76">04</text>
+    <text class="h" x="738" y="100">Rebuild + re-evaluate</text>
+    <text class="s" x="738" y="119">Against a held-out set that has</text>
+    <text class="s" x="738" y="134">GROWN with real data.</text>
+
+    <rect class="box win r5" x="952" y="48" width="212" height="104"/>
+    <text class="n" x="970" y="76" fill="var(--ok)">05</text>
+    <text class="h" x="970" y="100">Offer v(n+1) if it wins</text>
+    <text class="s" x="970" y="119">The customer is never given</text>
+    <text class="s" x="970" y="134">a regression.</text>
+  </g>
+
+  <path class="link" d="M236 100 H252"/>
+  <path class="link" d="M468 100 H484"/>
+  <path class="link" d="M700 100 H716"/>
+  <path class="link" d="M932 100 H948"/>
+
+  <!-- the loop closing: hard cases become the next generation's training data -->
+  <use href="#loop" class="ret"/>
+  <circle r="5" fill="var(--maj)">
+    <animateMotion dur="6s" repeatCount="indefinite"><mpath href="#loop"/></animateMotion>
+  </circle>
+
+  <text class="t s" x="600" y="250" text-anchor="middle" fill="var(--maj)">
+    escalated queries and corrected fields feed the next generation
+  </text>
+
+  <text class="t cap" x="24" y="302">
+    The interface is a month of work. The compiler is six months. The eval library is eighteen. This corpus is permanent.
+  </text>
+  <text class="t cap" x="1176" y="302" text-anchor="end" opacity=".75">B-10</text>
+</svg>
