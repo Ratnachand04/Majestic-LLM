@@ -48,7 +48,7 @@ FORGE -> Spec IR -> [GATE 1] -> PLANNER -> Build Plan IR -> [GATE 2]
 | # | Subsystem | What it does |
 |---|---|---|
 | 1 | **FORGE** | slot-filling interview; asks four questions, not forty; refuses to guess an ambiguous slot |
-| 2 | **PLANNER** | deterministic search over a typed catalogue; an LLM proposes only when no precedent matches, and a validator always disposes |
+| 2 | **PLANNER** | seven hard predicates over an enumerable plan space; returns a plan **or a refusal with a witness**. Deterministic — no LLM on the common path ([detail](docs/planner.md)) |
 | 3 | **DATA FACTORY** | seed-anchored amplification behind blocking QA gates; refuses below the real-seed floor |
 | 4 | **TRAINER** | LoRA/QLoRA by default; parallel candidates where the plan is uncertain |
 | 5 | **PROVING GROUND** | seven axes, all must pass; re-run in full after quantisation |
@@ -83,6 +83,13 @@ stage    : gate1  (no planning, no data, no GPU)
   rather than unlikely.
 - **Untrusted content cannot reach a privileged tool** — proven statically, then
   enforced again at runtime.
+- **A latency promise is never made from unmeasured hardware.** Effective
+  throughput runs at 30–60% of peak; a planner that interpolates it is
+  fabricating a commitment, so `P_lat` refuses unless the estimate is explicitly
+  accepted.
+- **Refusal is a return value, not an exception** — with a minimal witness and
+  ordered remedies. Even a *free* build is refused below θ\* = (C+κ)/(V+κ),
+  because the damage of shipping a bad model is not the compute you burned.
 
 ---
 
@@ -1012,15 +1019,15 @@ flowchart LR
     direction LR
     ACT1["<b>ACT 01 · CUSTOMER</b><br/>Describe the need<br/><small>'Read lab forms into our system.<br/>Must work when the internet dies.'</small>"]
     ACT2["<b>ACT 02 · FORGE</b><br/>Interview, four questions<br/><small>device auto-probe returns 4 GB Android.<br/>Upload 200 forms. Flag or guess?<br/>Handwriting too?</small>"]
-    ACT3["<b>ACT 03 · FORGE</b><br/>Plan in eight seconds<br/><small>offline closure verified. 4 GB caps the<br/>base at 2B. Two candidates scheduled<br/>in parallel.</small>"]
+    ACT3["<b>ACT 03 · FORGE</b><br/>Plan in eight seconds<br/><small>offline closure verified. 4 GB caps the<br/>base at 1.7B — the 4B misses by 165 MB.<br/>Customer opted in to two candidates.</small>"]
     ACT4["<b>ACT 04 · BUILD</b><br/>Split, then amplify<br/><small>150 seed, 50 LOCKED. Teacher generates<br/>60k anchored forms with occlusion<br/>and format drift.</small>"]
-    ACT5["<b>ACT 05 · BUILD</b><br/>Train two candidates<br/><small>QLoRA on a 1.7B and a 4B base, in<br/>parallel, on rented A100s. Forty minutes.</small>"]
+    ACT5["<b>ACT 05 · BUILD</b><br/>Train two candidates<br/><small>QLoRA on a 1.7B and a 0.6B base, in<br/>parallel, on rented A100s. Forty minutes.<br/><b>Opt-in: faster, not cheaper.</b></small>"]
     ACT1 --> ACT2 --> ACT3 --> ACT4 --> ACT5
   end
 
   subgraph P2["PHASE TWO — PROVE, CERTIFY AND DEPLOY"]
     direction LR
-    ACT6["<b>ACT 06 · PROVE</b><br/>Score both, pick one<br/><small>1.7B scores 0.94 F1 at 1.6 s.<br/>4B scores 0.95 at 4.1 s and breaks the<br/>latency budget. <b>1.7B wins.</b></small>"]
+    ACT6["<b>ACT 06 · PROVE</b><br/>Score both, pick one<br/><small>1.7B scores 0.94 F1 at ~13.8 s.<br/>0.6B scores 0.88 at ~4.5 s — below the<br/>0.93 gate. <b>1.7B wins, and the budget<br/>had to be relaxed to 15 s.</b></small>"]
     ACT7["<b>ACT 07 · PROVE</b><br/>Quantise, then re-score<br/><small>Q4_K_M gives 0.937, above gate.<br/>Flip rate inside bound. Regression and<br/>safety suites pass.</small>"]
     ACT8["<b>ACT 08 · REGISTRY</b><br/>Certify and package<br/><small>model card, eval certificate and licence<br/>chain attached. GGUF built for<br/>Android CPU.</small>"]
     ACT9["<b>ACT 09 · CUSTOMER</b><br/>Read the scorecard<br/><small>93.7% on their OWN 50 forms, twelve<br/>sample extractions, three honest<br/>failure cases.</small>"]
@@ -1029,11 +1036,13 @@ flowchart LR
   end
 
   EXP["<b>WHAT THE CUSTOMER EXPERIENCES</b><br/>Total wall clock is roughly <b>fifty-two minutes</b>. Marginal cost is<br/><b>twenty to forty dollars</b>, or <b>zero</b> on a spec-hash cache hit.<br/>The customer never receives a model file — they receive a<br/>scorecard and an install link."]
+  FIX["<b>TWO NUMBERS IN THIS FLOW WERE WRONG, AND THE PLANNER CAUGHT THEM</b><br/>This diagram once read <b>1.6 s</b> for act 6. The arithmetic says <b>~13.8 s</b> — a 500-token form is<br/>prefill-bound, and prefill is compute-bound at roughly 50 tok/s on a mid-range CPU.<br/>It also implied parallel candidates were free. They are <b>strictly worse in expected cost</b>:<br/>E[cost]₂/E[cost]₁ = 2/(2−p) > 1. They buy wall-clock time, so they are opt-in."]
   NEXT["<b>WHAT HAPPENS NEXT</b><br/>Act eleven, two months later: staff corrections accumulate, sync<br/>when online, and Majestic offers v4 <b>only if it beats v3</b> on a<br/>held-out set that has GROWN with real data.<br/>That is where the compounding begins."]
 
   ACT5 -- "continue" --> ACT6
   ACT10 --> EXP
   ACT10 --> NEXT
+  ACT6 --> FIX
 
   classDef maj fill:#fdf0ea,stroke:#e8562a,stroke-width:2px,color:#20160f
   classDef gate fill:#fdecec,stroke:#c62026,stroke-width:2px,color:#2a1113
@@ -1045,6 +1054,7 @@ flowchart LR
   class ACT4,ACT5 pri
   class ACT8,ACT10,EXP ok
   class ACT1,ACT9,NEXT com
+  class FIX gate
 ```
 
 ---
