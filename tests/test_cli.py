@@ -109,6 +109,59 @@ def test_validate_shows_warnings_on_request(capsys):
     assert "logit_kd_reachable" in capsys.readouterr().out
 
 
+def _apex_spec(tmp_path: Path, **over) -> Path:
+    body = {
+        "task_primitive": "extract", "device_target": "android_tablet_4gb",
+        "offline_required": True, "seed_data_count": 150,
+        "data_rights": "customer_owned", "quality_gate": 0.93,
+        "latency_budget_ms": 2000,
+        "io_schema": {"tokens_in": 500, "tokens_out": 60,
+                      "accept_unmeasured_latency": True},
+    }
+    body.update(over)
+    path = tmp_path / "spec.json"
+    path.write_text(json.dumps(body), encoding="utf-8")
+    return path
+
+
+def test_plan_command_refuses_with_a_witness(tmp_path: Path, capsys):
+    """§8: eight seconds of computation prevents a 45-minute useless build."""
+    assert main(["plan", "--spec", str(_apex_spec(tmp_path))]) == 1
+    out = capsys.readouterr().out
+    assert "REFUSED" in out
+    assert "P_lat" in out and "prefill" in out
+    assert "Remedies" in out
+    assert "unmeasured" in out
+    assert "before any GPU was allocated" in out
+
+
+def test_plan_command_admits_with_a_realistic_budget(tmp_path: Path, capsys):
+    spec = _apex_spec(tmp_path, latency_budget_ms=20_000)
+    assert main(["plan", "--spec", str(spec)]) == 0
+    out = capsys.readouterr().out
+    assert "ADMITTED" in out
+    assert "largest base that fits" in out
+    assert "theta*" in out
+
+
+def test_plan_explain_shows_the_predicate_order(tmp_path: Path, capsys):
+    main(["plan", "--spec", str(_apex_spec(tmp_path)), "--explain"])
+    out = capsys.readouterr().out
+    assert "P_tok ->" in out                 # cheapest-and-most-discriminating first
+    assert "candidate plans" in out
+    assert "early exit" in out
+
+
+def test_plan_tier_changes_the_threshold(tmp_path: Path, capsys):
+    """A regulated tier refuses far more than an experimental one."""
+    spec = _apex_spec(tmp_path, latency_budget_ms=20_000, quality_gate=0.5)
+    main(["plan", "--spec", str(spec), "--tier", "experimental"])
+    experimental = capsys.readouterr().out
+    main(["plan", "--spec", str(spec), "--tier", "regulated"])
+    regulated = capsys.readouterr().out
+    assert experimental != regulated
+
+
 def test_budget_command_prints_the_b09_table(capsys):
     assert main(["budget"]) == 0
     out = capsys.readouterr().out
