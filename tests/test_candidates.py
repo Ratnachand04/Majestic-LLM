@@ -1,6 +1,8 @@
 """Tests for parallel candidates and the k-bit base rule (A-01, B-01, C-02)."""
 from __future__ import annotations
 
+import pytest
+
 from modelrig.candidates import CandidateResult, Selection, build_candidates, select
 from modelrig.catalogue import DEFAULT_CATALOGUE, ladder_tier
 from modelrig.feasibility import YamlDeviceProfiler
@@ -86,11 +88,26 @@ def test_bases_for_excludes_moe_by_default():
 
 
 # --- parallel candidates (B-01, C-02 acts 5-6) --------------------------- #
-def test_candidate_plans_are_ordered_largest_first():
-    plans = Planner(profiler=PROFILER).candidate_plans(_spec(), limit=2)
-    assert len(plans) == 2
-    sizes = [DEFAULT_CATALOGUE.base(p.base_ref).params_b for p in plans]
-    assert sizes[0] > sizes[1]
+def test_parallel_candidates_are_opt_in_only():
+    """§15: they raise expected cost, so the planner never enables them itself."""
+    planner = Planner(profiler=PROFILER)
+    assert len(planner.candidate_plans(_spec(), limit=2)) == 1
+
+    opted_in = _spec(io_schema={"allow_parallel_candidates": True})
+    assert len(planner.candidate_plans(opted_in, limit=2)) >= 1
+
+
+def test_parallel_candidates_are_strictly_worse_in_expected_cost():
+    """E[cost]_k / E[cost]_1 = k*p / (1 - (1-p)^k) > 1 for every p in (0, 1).
+
+    At p = 0.5 two candidates cost 33% more in expectation than building one and
+    retrying on failure. What they buy is wall-clock time, not money.
+    """
+    for p in (0.1, 0.25, 0.5, 0.75, 0.9):
+        assert Planner.parallel_cost_ratio(p, k=2) > 1.0
+    assert Planner.parallel_cost_ratio(0.5, k=2) == pytest.approx(4 / 3)
+    # At p = 1 the second candidate is pure waste: exactly 2x.
+    assert Planner.parallel_cost_ratio(1.0, k=2) == pytest.approx(2.0)
 
 
 def test_build_candidates_runs_every_plan():
