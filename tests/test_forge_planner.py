@@ -88,7 +88,36 @@ def test_planner_admits_a_plan_deterministically():
     result = Planner(profiler=PROFILER).plan(_spec())
     assert result.admitted is True
     assert result.path == "deterministic"     # no LLM involved on the common path
-    assert result.plan.bit_width == "int4"    # optimal accuracy-per-bit (A-01)
+    assert result.plan.base_ref
+    assert "largest base that fits" in result.plan.provenance["rule"]
+
+
+def test_spare_ram_buys_precision_only_once_nothing_larger_fits():
+    """A-01's k-bit law spends memory on SIZE first, precision second.
+
+    The law says 4-bit is the optimal accuracy-per-bit point: given spare memory,
+    a bigger model beats a wider one. Model sizes are discrete, so once the next
+    base up will not fit at 4-bit the residual genuinely cannot buy size — and
+    only then should it buy precision.
+    """
+    from modelrig.planner import default_catalog, select_base
+    from modelrig.planner.predicates import memory
+
+    catalog = default_catalog()
+    spec = _spec()                                   # 4 GB tablet
+    chosen = select_base(spec, catalog)
+    device = catalog.device(spec.device_target)
+
+    # Nothing larger fits at 4-bit ...
+    chain = catalog.bases(TaskPrimitive.EXTRACT)
+    larger = [m for m in chain if m.params > chosen.params]
+    for model in larger:
+        m = memory(model, catalog, quantiser="q4_k_m", context=2048, device=device)
+        assert m.total > device.free_ram, f"{model.ref} fits at 4-bit but was not chosen"
+
+    # ... so widening the chosen base is the only remaining use for the residual.
+    wide = memory(chosen, catalog, quantiser="int8", context=2048, device=device)
+    assert wide.total <= device.free_ram
 
 
 def test_planner_caps_the_base_at_the_device_tier():
@@ -125,10 +154,26 @@ def test_planner_mutates_an_infeasible_llm_proposal():
     assert result.mutations, "an infeasible proposal must be mutated, not accepted"
 
 
-def test_planner_defaults_to_sequence_kd_which_crosses_tokenizers():
+def test_distil_mode_is_derived_from_tokenizer_identity_not_chosen():
+    """P_tok is definitional, not a preference (§3.3).
+
+    Qwen3 spans 0.6B to 32B on one tokenizer, so a 32B teacher CAN distil into a
+    small Qwen student at logit level — and when it can, it should, because logit
+    KD transfers the full probability mass. The planner derives that; it never
+    accepts a mode as input.
+    """
+    from modelrig.planner import default_catalog
+    from modelrig.planner.predicates import derive_distil_mode
+
     result = Planner(profiler=PROFILER).plan(_spec(seed_data_count=200))
-    assert result.plan.distil_mode in ("sequence_kd", "none")
-    assert result.plan.distil_mode != "logit_kd"
+    catalog = default_catalog()
+    base = catalog.model(result.plan.base_ref)
+    teacher = catalog.model(result.plan.teacher_ref) if result.plan.teacher_ref else None
+
+    assert result.plan.distil_mode == derive_distil_mode(base, teacher)
+    if teacher is not None:
+        expected = "logit_kd" if base.tokenizer == teacher.tokenizer else "sequence_kd"
+        assert result.plan.distil_mode == expected
 
 
 def test_planner_records_outcomes_for_meta_learning():
@@ -136,6 +181,9 @@ def test_planner_records_outcomes_for_meta_learning():
     spec = _spec()
     result = planner.plan(spec)
     planner.record_outcome(spec, result.plan, passed=True)
-    assert len(planner.outcomes.history) == 1
-    # Cold start: no prediction until enough history exists (GAP-02).
-    assert planner.outcomes.predict_pass_probability("extract") is None
+    assert len(planner.outcomes) == 1
+    # Cold start: the learner is inert and gamma is near zero, so the prior
+    # carries the prediction entirely (§5).
+    assert planner.outcomes.active is False
+    assert planner.outcomes.gamma < 0.05
+    assert planner.outcomes.predict(0.7, (1.0,) * 6) == 0.7
