@@ -75,6 +75,9 @@ class CompileResult:
     selection: Optional[Selection] = None
     repair_attempts: int = 0
     quantisation: Optional[dict[str, Any]] = None
+    #: True only when the SPEC asked for parallel candidates. §15: they raise
+    #: expected cost, so they are never enabled on the customer's behalf.
+    parallel_candidates: bool = False
 
     @property
     def refused(self) -> bool:
@@ -274,10 +277,15 @@ class MajesticCompiler:
             logger.warning("compile: refused by the data factory — %s", exc)
             return result
 
-        # --- PARALLEL CANDIDATES -> score both, pick one (C-02 acts 5-6) -- #
+        # --- TRAIN. Candidates are OPT-IN ONLY (§15) ---------------------- #
+        # Running k candidates is strictly worse in expected cost at every pass
+        # probability: E[cost]_2 / E[cost]_1 = 2/(2-p) > 1. What it buys is
+        # wall-clock time and variance reduction, which is the customer's trade
+        # to make — so the pipeline never enables it on their behalf.
         result.stage_reached = "train"
         plans = self.planner.candidate_plans(spec, limit=self.n_candidates)
         plans = [p for p in plans if self._admissible(spec, p)] or [planning.plan]
+        result.parallel_candidates = len(plans) > 1
 
         selection = select(
             build_candidates(plans, lambda p: self._train_and_score(spec, p, bundle)),
