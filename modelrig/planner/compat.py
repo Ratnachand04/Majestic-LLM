@@ -1,20 +1,15 @@
-"""PLANNER — deterministic first, LLM only at the edges (B-05).
+"""The stateful adapter the build pipeline uses.
 
-    Spec IR -> warm start from precedent -> [reuse | propose] -> VALIDATOR -> Build Plan IR
+This is a **facade**, not a second planner. Every decision is delegated to
+:mod:`modelrig.planner.core`; what lives here is the mutable state a long-running
+pipeline needs — accumulated precedents and build outcomes — plus the
+``PlanningResult`` shape the pipeline already consumes.
 
-The common path is deterministic: embed the spec, find a past build with the same
-shape that passed its gate, and adapt its plan. No LLM is involved. Only when no
-precedent matches may a proposer suggest a plan — and the validator always
-disposes. **An LLM never freestyles a training plan**: a hallucinated tokenizer
-mismatch costs sixty dollars of GPU to discover.
-
-Search-based design is deliberately rejected in the build loop. Neural
-architecture search costs thousands of GPU-hours per result, which is
-irreconcilable with a $20-$120 build. Rules plus meta-learning, not search.
-
-GAP-02 (open): the warm start becomes a compounding asset only once
-:class:`~modelrig.feasibility.OutcomePredictor` can predict gate-pass from a spec
-embedding. Until then precedent lookup is exact-shape matching.
+The one piece of real logic is the rare path of §7: when no precedent matches and
+an external proposer (LLM role 5, tie-breaker only) offers a plan, the validator
+disposes of it and the mutation loop repairs it. An LLM never freestyles a
+training plan — a hallucinated tokenizer mismatch costs sixty dollars of GPU to
+discover.
 """
 from __future__ import annotations
 
@@ -22,26 +17,23 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from majestic.logging_utils import get_logger
-from modelrig.catalogue import DEFAULT_CATALOGUE, BaseModel, Catalogue, ladder_tier
-from modelrig.feasibility import HeuristicFeasibilityEngine, OutcomePredictor
 from modelrig.gates import GateResult, gate2_plan_feasibility
 from modelrig.ir import BuildPlanIR, SpecIR
-from modelrig.primitives import TaskPrimitive, spec_for
+from modelrig.planner import core
+from modelrig.planner.catalog import Catalog, CatalogError, ModelSpec, default_catalog
+from modelrig.planner.metalearn import (
+    Observation,
+    OutcomePredictor,
+    PrecedentIndex,
+    features_of,
+)
+from modelrig.planner.objective import Tier
+from modelrig.planner.predicates import ordered_predicates, seed_floor
+from modelrig.planner.refusal import Refusal
 
 logger = get_logger(__name__)
 
-# Cost model for the budget predicate, in USD (QLoRA on rented A100s, A-03).
-_COST_PER_PARAM_B = {"lora": 4.0, "dora": 5.0, "qlora": 3.0, "full_ft": 25.0}
 _MAX_MUTATIONS = 6
-#: A device that cannot hold this many billion resident parameters is
-#: "memory-constrained" and MoE bases are excluded from it entirely (A-07).
-_MOE_RESIDENCY_HEADROOM_B = 30.0
-#: Declared share of novel domain vocabulary above which LoRA is not enough (A-03).
-_NOVEL_VOCAB_FULL_FT_THRESHOLD = 0.30
-#: Primitives where coverage matters more than mode-seeking, so forward-KL (A-02).
-_COVERAGE_PRIMITIVES = frozenset(
-    {TaskPrimitive.GENERATE, TaskPrimitive.SUMMARISE, TaskPrimitive.REWRITE}
-)
 
 
 @dataclass
@@ -59,253 +51,220 @@ class PlanningResult:
 
     plan: Optional[BuildPlanIR]
     gate: GateResult
-    path: str = "deterministic"          # deterministic | precedent | proposed
+    path: str = "deterministic"           # deterministic | precedent | proposed | refused
     mutations: list[str] = field(default_factory=list)
+    refusal: Optional[Refusal] = None
+    outcome: Optional[core.PlanOutcome] = None
 
     @property
     def admitted(self) -> bool:
         return self.plan is not None and self.gate.passed
 
 
-def _spec_shape(spec: SpecIR) -> tuple:
-    """The coarse shape used for precedent matching (not the exact hash)."""
-    return (
-        spec.task_primitive.value,
-        spec.device_target,
-        spec.offline_required,
-        round(spec.quality_gate, 2),
-    )
-
-
 class Planner:
-    """Compiles a Spec IR into an admitted Build Plan IR."""
+    """Compiles a Spec IR into an admitted Build Plan IR, or refuses."""
 
     def __init__(
         self,
-        catalogue: Catalogue | None = None,
+        catalogue=None,
         profiler=None,
-        proposer: Optional[Callable[[SpecIR, Catalogue], BuildPlanIR]] = None,
+        proposer: Optional[Callable[[SpecIR, object], BuildPlanIR]] = None,
         outcome_predictor: Optional[OutcomePredictor] = None,
+        catalog: Optional[Catalog] = None,
+        tier: Tier = Tier.COMMERCIAL,
+        exploration_rate: float = 0.0,
     ) -> None:
-        self.catalogue = catalogue or DEFAULT_CATALOGUE
+        # ``catalogue``/``profiler`` are the legacy positional arguments the
+        # pipeline passes; the typed catalogue supersedes both.
+        self.legacy_catalogue = catalogue
         self.profiler = profiler
         self.proposer = proposer          # LLM role 5 — tie-breaker only
-        self.history: list[PrecedentRecord] = []
+        self.tier = tier
+        self.catalog = catalog or default_catalog()
+        self.precedents = PrecedentIndex(exploration_rate=exploration_rate)
         self.outcomes = outcome_predictor or OutcomePredictor()
+        self.history: list[PrecedentRecord] = []
 
-    # -- warm start ------------------------------------------------------ #
-    def record_outcome(self, spec: SpecIR, plan: BuildPlanIR, passed: bool) -> None:
-        """Feed a finished build back into the planner's memory."""
-        self.history.append(PrecedentRecord(_spec_shape(spec), plan, passed))
-        self.outcomes.record(spec.hash, plan.hash, spec.task_primitive.value, passed)
+    # -- history ---------------------------------------------------------- #
+    def record_outcome(
+        self, spec: SpecIR, plan: BuildPlanIR, passed: bool, margin: float | None = None
+    ) -> None:
+        """Feed a finished build back into precedents and the meta-learner."""
+        shape = core.spec_shape(spec)
+        self.history.append(PrecedentRecord(shape, plan, passed))
+        self.precedents.add(shape, plan, passed, margin or (1.0 if passed else 0.0))
 
-    def _precedent(self, spec: SpecIR) -> BuildPlanIR | None:
-        shape = _spec_shape(spec)
-        for record in reversed(self.history):
-            if record.spec_shape == shape and record.passed:
-                return record.plan
-        return None
-
-    # -- deterministic construction --------------------------------------- #
-    def _device_cap(self, spec: SpecIR) -> float:
-        """Largest base (in billions) this device can hold at 4-bit."""
-        if self.profiler is None:
-            return float("inf")
         try:
-            device = self.profiler.profile(spec.device_target)
-        except KeyError:
-            return float("inf")
-        engine = HeuristicFeasibilityEngine(profiler=self.profiler)
-        return engine.max_base_for(device)
+            base = self.catalog.model(plan.base_ref)
+            bits = self.catalog.bits_effective(base, plan.quantiser)
+            params_b = base.params_b
+        except CatalogError:
+            bits, params_b = 5.2, 1.0
+        self.outcomes.record(Observation(
+            spec_hash=spec.hash, plan_hash=plan.hash,
+            features=features_of(
+                params_b=params_b,
+                seed_ratio=spec.seed_data_count / max(seed_floor(spec.task_primitive), 1),
+                bits_effective=bits, distil_mode=plan.distil_mode,
+                context=2048, quality_gate=spec.quality_gate,
+            ),
+            outcome=margin if margin is not None else (1.0 if passed else 0.0),
+            primitive=spec.task_primitive.value, passed=passed,
+        ))
 
-    def _eligible_bases(self, spec: SpecIR) -> list[BaseModel]:
-        """Bases that fit the device, ordered LARGEST FIRST (A-01)."""
-        prim = spec_for(spec.task_primitive)
-        max_b = self._device_cap(spec)
+    # -- the §12 chain ---------------------------------------------------- #
+    def _eligible_bases(self, spec: SpecIR) -> list[ModelSpec]:
+        """Bases that fit, largest first. The chain of §12."""
+        best = core.select_base(spec, self.catalog)
+        chain = self.catalog.bases(spec.task_primitive)
+        if best is None:
+            return list(reversed(chain))[:1]
+        # Antitone: everything at or below b* fits, so the eligible set is the
+        # prefix of the reversed chain starting at b*.
+        return [m for m in reversed(chain) if m.params <= best.params]
 
-        # MoE is excluded from memory-constrained targets: sparse activation is
-        # not sparse residency, so the whole expert set must be held (A-07).
-        memory_constrained = max_b < _MOE_RESIDENCY_HEADROOM_B
-        candidates = self.catalogue.bases_for(
-            spec.task_primitive,
-            largest_first=True,
-            allow_moe=not memory_constrained,
-            max_params_b=None if max_b == float("inf") else max_b,
-            min_params_b=prim.min_params_b,
-        )
-        if candidates:
-            return candidates
-        # Nothing fits: return the smallest supporting base anyway so the
-        # validator reports a precise, numeric reason instead of a blank refusal.
-        fallback = self.catalogue.bases_for(spec.task_primitive, largest_first=False)
-        return fallback[:1] or list(self.catalogue.bases)[:1]
+    def _device_cap(self, spec: SpecIR) -> float:
+        """Largest base (in billions) this device admits at 4-bit."""
+        best = core.select_base(spec, self.catalog)
+        return best.params_b if best else 0.0
 
-    def _needs_full_finetune(self, spec: SpecIR) -> bool:
-        """Escalate past LoRA only on declared novel domain vocabulary (A-03).
+    def _plan_for_base(self, spec: SpecIR, base) -> BuildPlanIR:
+        """Build a complete, validated plan around one chosen base.
 
-        Biderman et al. (2405.09673): LoRA learns less and forgets less. It
-        underperforms full fine-tuning when a genuinely NEW domain must be
-        learned, but preserves general ability far better — so the escalation is
-        deliberate and threshold-driven, and a regression suite runs either way.
+        Accepts either a typed :class:`ModelSpec` or a legacy
+        ``modelrig.catalogue.BaseModel``, because the repair loop in the pipeline
+        passes the latter.
         """
-        novel = float(spec.io_schema.get("novel_vocabulary_ratio", 0.0)) \
-            if isinstance(spec.io_schema, dict) else 0.0
-        return novel >= _NOVEL_VOCAB_FULL_FT_THRESHOLD
-
-    def _kl_objective(self, spec: SpecIR) -> str:
-        """Reverse-KL is mode-seeking and less hallucinatory (MiniLLM 2306.08543).
-
-        Majestic selects reverse-KL for extraction and classification, and
-        forward-KL for open-ended drafting where coverage matters (A-02).
-        """
-        return "forward_kl" if spec.task_primitive in _COVERAGE_PRIMITIVES else "reverse_kl"
-
-    def _plan_for_base(self, spec: SpecIR, base: BaseModel) -> BuildPlanIR:
-        """Build a complete plan around one chosen base."""
-        prim = spec_for(spec.task_primitive)
-
-        # Sequence-level KD is the default: it crosses any tokenizer boundary
-        # and composes with synthetic data generation (A-02).
-        distil_mode = "sequence_kd" if spec.seed_data_count < prim.seed_floor * 4 else "none"
-        teacher = self.catalogue.teacher_for(base, distil_mode) if distil_mode != "none" else None
-
-        if self._needs_full_finetune(spec):
-            peft = "full_ft"
-        else:
-            peft = "qlora" if base.params_b >= 4.0 else "lora"
-
-        bit_width = "int4"     # optimal accuracy-per-bit under a RAM budget (A-01)
-        quantiser = "k_quant" if spec.device_target.startswith(("android", "raspberry")) else "awq"
-        target = (
-            "gguf" if spec.device_target.startswith(("android", "raspberry", "laptop_cpu"))
-            else "onnx"
+        ref = getattr(base, "ref", str(base))
+        model = self.catalog.model(ref)
+        enum = core.enumerate_feasible(spec, self.catalog, max_bases=len(self.catalog.models))
+        for candidate in enum.feasible:
+            if candidate.base.ref == model.ref:
+                return candidate.to_ir(spec, self._cost_of(candidate))
+        # Nothing feasible on that base: emit the shape anyway so the caller's
+        # validator produces a precise numeric reason rather than a blank.
+        fallback = core.PlanCandidate(
+            base=model, teacher=None, distil_mode="none", peft_method="lora",
+            rank=16, quantiser="q4_k_m", bit_width="int4",
+            target="gguf" if spec.offline_required else "onnx",
+            data_recipe=core._data_recipe(spec, model),
         )
-        if spec.offline_required and target == "vllm":
-            target = "gguf"
+        return fallback.to_ir(spec, self._cost_of(fallback))
 
-        budget = round(_COST_PER_PARAM_B.get(peft, 4.0) * max(base.params_b, 0.5), 2)
+    def _cost_of(self, candidate: core.PlanCandidate) -> int:
+        from modelrig.planner import costmodel
 
-        return BuildPlanIR(
-            spec_hash=spec.hash,
-            base_ref=base.ref,
-            teacher_ref=teacher.ref if teacher else None,
-            distil_mode=distil_mode,
-            peft_method=peft,
-            rank=16 if base.params_b < 4 else 32,
-            data_recipe={
-                "seed_floor": prim.seed_floor,
-                "amplification": "backtranslate+evolve",
-                "kl_objective": self._kl_objective(spec),
-                "requires_network": False,
-            },
-            quantiser=quantiser,
-            bit_width=bit_width,
-            grammar_ref=f"grammar:{spec.task_primitive.value}" if prim.structured_output else None,
-            eval_suite_ref=f"eval:{spec.task_primitive.value}",
-            target=target,
-            budget_usd=budget,
-            provenance={
-                "selected_by": "deterministic",
-                "base_cap_params_b": self._device_cap(spec),
-                "ladder_tier": ladder_tier(base.params_b),
-                "rule": "largest base that fits at 4-bit (A-01 k-bit scaling law)",
-            },
-        )
+        recipe = candidate.data_recipe
+        return costmodel.estimate(
+            candidate.base, method=candidate.peft_method,
+            n_synthetic=int(recipe.get("n_synthetic", 0)),
+            n_train_tokens=int(recipe.get("n_train_tokens", 0)),
+            n_eval_examples=int(recipe.get("n_eval_examples", 0)),
+            uses_teacher=candidate.teacher is not None,
+        ).total
 
     def _default_plan(self, spec: SpecIR) -> BuildPlanIR:
-        """Pick the LARGEST sufficient base under the device cap (A-01)."""
-        return self._plan_for_base(spec, self._eligible_bases(spec)[0])
+        """The largest base that fits, fully planned (§12 + A-01)."""
+        base = core.select_base(spec, self.catalog)
+        if base is None:
+            base = self.catalog.bases(spec.task_primitive)[0]
+        return self._plan_for_base(spec, base)
 
+    # -- parallel candidates: opt-in only (§15) ---------------------------- #
     def candidate_plans(self, spec: SpecIR, limit: int = 2) -> list[BuildPlanIR]:
-        """Top-N plans to build IN PARALLEL when the choice is uncertain (B-01).
+        """Alternate plans to build in parallel — **only if the spec asks**.
 
-        C-02 acts 5-6: two candidates are trained in parallel and the Proving
-        Ground picks the winner, because the largest base that fits RAM may still
-        break the latency budget. Ordering is largest-first, so candidate 0 is the
-        most capable option and later candidates are the cheaper fallbacks.
+        §15: running k candidates is strictly worse in expected cost at every
+        pass probability. For two identical candidates,
+
+            E[cost]_2 / E[cost]_1 = 2 / (2 - p) > 1     for all p in (0, 1]
+
+        At p = 0.5 that is 33% more expected spend than building one and
+        retrying on failure. What parallelism buys is **wall-clock time and
+        variance reduction** — a time-for-money trade the customer must choose,
+        never one the planner makes on their behalf. So this returns a single
+        plan unless ``io_schema.allow_parallel_candidates`` is set.
         """
-        return [self._plan_for_base(spec, b) for b in self._eligible_bases(spec)[:limit]]
+        outcome = core.plan(spec, self.catalog, precedents=self.precedents,
+                            predictor=self.outcomes, tier=self.tier)
+        if outcome.plan is None:
+            return []
+        if not core._wants_parallel(spec):
+            return [outcome.plan]
+        return [outcome.plan, *outcome.candidates][:limit]
 
-    # -- mutation on validator rejection ---------------------------------- #
-    def _next_smaller(self, plan: BuildPlanIR) -> list[BaseModel]:
-        """Dense bases smaller than the current one, largest first.
+    @staticmethod
+    def parallel_cost_ratio(p: float, k: int = 2) -> float:
+        """``E[cost]_k / E[cost]_1`` for k identical candidates (§15).
 
-        Downsizing is the response to a validator rejection, not the starting
-        point: the plan begins at the largest base that fits (A-01) and steps
-        down only when a hard predicate says it must.
+        Exposed so the customer-facing surface can quote the real number instead
+        of the folklore that parallel candidates are free.
         """
-        current = self.catalogue.base(plan.base_ref)
-        ceiling = current.params_b if current else float("inf")
-        return sorted(
-            (b for b in self.catalogue.bases if b.params_b < ceiling and not b.is_moe),
-            key=lambda b: -b.params_b,
-        )
+        if not 0.0 < p <= 1.0:
+            raise ValueError("pass probability must lie in (0, 1]")
+        return (k * p) / (1.0 - (1.0 - p) ** k)
 
+    # -- the rare path: an LLM proposes, the validator disposes ------------ #
     def _mutate(self, plan: BuildPlanIR, gate: GateResult) -> tuple[BuildPlanIR, str] | None:
-        """Apply one targeted repair for the first blocking reason."""
         reasons = " ".join(gate.reasons).lower()
+        current = self.catalog.models.get(plan.base_ref)
+        smaller = [
+            m for m in reversed(self.catalog.bases())
+            if current is None or m.params < current.params
+        ]
 
-        if "ram" in reasons or "file-size rule" in reasons:
-            smaller = self._next_smaller(plan)
+        if "ram" in reasons or "free ram" in reasons or "over by" in reasons:
             if smaller:
                 plan.base_ref = smaller[0].ref
-                plan.budget_usd = round(
-                    _COST_PER_PARAM_B.get(plan.peft_method, 4.0) * max(smaller[0].params_b, 0.5), 2
-                )
                 return plan, f"downsized base to {smaller[0].ref}"
             if plan.bit_width != "int4":
-                plan.bit_width = "int4"
+                plan.bit_width, plan.quantiser = "int4", "q4_k_m"
                 return plan, "dropped to int4"
             return None
-
-        if "identical tokenizer" in reasons or "logit distillation" in reasons:
+        if "tokenizer" in reasons or "logit distillation" in reasons:
             plan.distil_mode = "sequence_kd"
             return plan, "switched to sequence-level distillation (crosses tokenizers)"
-
         if "latency" in reasons:
-            smaller = self._next_smaller(plan)
             if smaller:
                 plan.base_ref = smaller[0].ref
                 return plan, f"downsized base for latency to {smaller[0].ref}"
             return None
-
         if "offline closure" in reasons and plan.target == "vllm":
             plan.target = "gguf"
             return plan, "retargeted to gguf for offline closure"
-
-        if "budget" in reasons or "tier ceiling" in reasons:
-            if plan.peft_method == "full_ft":
+        if "budget" in reasons or "ceiling" in reasons:
+            if plan.peft_method != "qlora":
                 plan.peft_method = "qlora"
-                return plan, "switched full fine-tune to QLoRA to fit the budget"
-            base = self.catalogue.base(plan.base_ref)
-            if base:
-                plan.budget_usd = round(_COST_PER_PARAM_B["qlora"] * max(base.params_b, 0.5), 2)
-                plan.peft_method = "qlora"
-                return plan, "recosted with QLoRA"
+                return plan, "switched to QLoRA to fit the budget"
             return None
-
-        return None  # licence and data-rights failures are not mutable by the planner
+        return None      # licence and data-rights failures are not mutable
 
     # -- the public entry point ------------------------------------------- #
     def plan(self, spec: SpecIR) -> PlanningResult:
         """Produce an admitted Build Plan IR, or a gate result explaining why not."""
-        precedent = self._precedent(spec)
-        if precedent is not None:
-            plan = BuildPlanIR.from_dict({**precedent.to_dict(), "spec_hash": spec.hash})
-            path = "precedent"
-            logger.info("planner: reusing precedent plan for %s", spec.hash[:8])
-        elif self.proposer is not None:
-            plan = self.proposer(spec, self.catalogue)   # LLM role 5 — proposes
-            path = "proposed"
-            logger.info("planner: LLM proposed a plan for %s", spec.hash[:8])
-        else:
-            plan = self._default_plan(spec)
-            path = "deterministic"
+        if self.proposer is not None and self.precedents.nearest(core.spec_shape(spec)) is None:
+            return self._proposed_path(spec)
 
+        outcome = core.plan(spec, self.catalog, precedents=self.precedents,
+                            predictor=self.outcomes, tier=self.tier)
+        if outcome.plan is None:
+            gate = GateResult(
+                "gate2_plan_feasibility", False,
+                reasons=list(outcome.refusal.reasons) if outcome.refusal else ["no feasible plan"],
+                evidence=outcome.refusal.as_dict() if outcome.refusal else {},
+            )
+            return PlanningResult(None, gate, "refused", [], outcome.refusal, outcome)
+
+        gate = gate2_plan_feasibility(spec, outcome.plan, self.profiler, self.legacy_catalogue)
+        return PlanningResult(outcome.plan, gate, outcome.path, [], None, outcome)
+
+    def _proposed_path(self, spec: SpecIR) -> PlanningResult:
+        """LLM role 5. The proposal is validated and repaired, never trusted."""
+        plan = self.proposer(spec, self.legacy_catalogue)
+        logger.info("planner: LLM proposed a plan for %s", spec.hash[:8])
         mutations: list[str] = []
-        gate = gate2_plan_feasibility(spec, plan, self.profiler, self.catalogue)
+        gate = gate2_plan_feasibility(spec, plan, self.profiler, self.legacy_catalogue)
 
-        # The validator disposes: mutate and re-validate until admitted or stuck.
         for _ in range(_MAX_MUTATIONS):
             if gate.passed:
                 break
@@ -314,11 +273,25 @@ class Planner:
                 break
             plan, note = mutated
             mutations.append(note)
-            logger.info("planner: mutating plan — %s", note)
-            gate = gate2_plan_feasibility(spec, plan, self.profiler, self.catalogue)
+            logger.info("planner: mutating proposal — %s", note)
+            gate = gate2_plan_feasibility(spec, plan, self.profiler, self.legacy_catalogue)
 
         if not gate.passed:
-            logger.warning("planner: no admissible plan for %s: %s", spec.hash[:8], gate.reasons)
-            return PlanningResult(None, gate, path, mutations)
+            return PlanningResult(None, gate, "proposed", mutations)
+        return PlanningResult(plan, gate, "proposed", mutations)
 
-        return PlanningResult(plan, gate, path, mutations)
+    # -- diagnostics ------------------------------------------------------- #
+    def explain(self, spec: SpecIR) -> dict:
+        """Everything behind a decision, for auditing."""
+        outcome = core.plan(spec, self.catalog, precedents=self.precedents,
+                            predictor=self.outcomes, tier=self.tier)
+        return {
+            "path": outcome.path,
+            "admitted": outcome.admitted,
+            "considered": outcome.considered,
+            "predicate_evaluations": outcome.predicate_evaluations,
+            "predicate_order": [p.name for p in ordered_predicates()],
+            "predicted_quality": round(outcome.predicted_quality, 4),
+            "threshold": round(outcome.threshold, 4),
+            "refusal": outcome.refusal.as_dict() if outcome.refusal else None,
+        }
