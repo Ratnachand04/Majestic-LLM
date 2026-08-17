@@ -1,61 +1,102 @@
-# Device profiles for the feasibility engine.
+# Device profiles for the Planner's memory and latency predicates.
 #
-# ram_gb: total device RAM; accelerator: cpu|gpu|npu; compute_gflops: rough
-# sustained throughput; battery_wh: battery capacity (0 => mains powered);
-# usable_ram_fraction: share one app may hold before the OS pushes back.
+# ram_gb                 total device RAM
+# usable_ram_fraction    share the OS makes available at all (1.0 = all of it)
+# app_reserve_gb         M_app — what the application and OS hold, as an explicit
+#                        term so the memory breakdown can be audited line by line
+# prefill_tok_s          prompt-processing rate, AT reference_params_b
+# decode_tok_s           generation rate, AT reference_params_b
+# reference_params_b     the model size those rates were quoted at. Rates are
+#                        meaningless without it: prefill scales as 1/N_b (compute
+#                        -bound) and decode as 1/M_w (bandwidth-bound), so the
+#                        planner rescales them per candidate.
+# latency_source         unmeasured | vendor | device_lab
 #
-# measured: FALSE everywhere until a physical device lab fills these in (GAP-10).
-# On-device latency and battery are DESIGN TARGETS, not measurements. Energy and
-# thermal throttling — not raw speed — are the binding mobile constraints
-# (MELTing Point 2403.12844). Adapter-swap latency on mid-range phones is
-# likewise unvalidated and is a central product promise.
+# latency_source is UNMEASURED everywhere. P_lat REFUSES on an unmeasured device
+# unless the spec sets io_schema.accept_unmeasured_latency, because effective
+# throughput runs at 30-60% of peak and varies with thermal state, kernel quality
+# and quantisation format. A planner that interpolates those is fabricating a
+# promise. See GAP-10.
 devices:
   - name: android_lowend
     ram_gb: 3
+    usable_ram_fraction: 1.0
+    app_reserve_gb: 1.20
     accelerator: cpu
-    compute_gflops: 15
     battery_wh: 11
-    usable_ram_fraction: 0.5
-    measured: false
+    # SOURCE: llama.cpp CPU throughput band for a low-end ARM SoC, lower quartile.
+    prefill_tok_s: 22
+    decode_tok_s: 8
+    reference_params_b: 1.7
+    latency_source: unmeasured
+
   - name: android_midrange
     ram_gb: 6
+    usable_ram_fraction: 1.0
+    app_reserve_gb: 1.60
     accelerator: cpu
-    compute_gflops: 40
     battery_wh: 17
-    usable_ram_fraction: 0.6
-    measured: false
+    # SOURCE: §8 of the Planner specification — "prompt processing 30-80 tok/s,
+    # decode 10-20 tok/s for a 1.7B at Q4". Midpoints taken.
+    prefill_tok_s: 50
+    decode_tok_s: 16
+    reference_params_b: 1.7
+    latency_source: unmeasured
+
   - name: android_tablet_4gb
     ram_gb: 4
+    usable_ram_fraction: 1.0
+    app_reserve_gb: 1.40      # B-09's application and OS headroom
     accelerator: cpu
-    compute_gflops: 25
     battery_wh: 28
-    usable_ram_fraction: 0.6
-    measured: false
+    # SOURCE: as android_midrange; the tablet SoC is in the same class.
+    prefill_tok_s: 50
+    decode_tok_s: 16
+    reference_params_b: 1.7
+    latency_source: unmeasured
+
   - name: android_flagship
     ram_gb: 12
+    usable_ram_fraction: 1.0
+    app_reserve_gb: 2.00
     accelerator: npu
-    compute_gflops: 120
     battery_wh: 19
-    usable_ram_fraction: 0.65
-    measured: false
+    # SOURCE: NPU-accelerated prefill; decode remains bandwidth-bound so it gains
+    # far less than prefill does. That asymmetry is the roofline, not a typo.
+    prefill_tok_s: 140
+    decode_tok_s: 26
+    reference_params_b: 1.7
+    latency_source: unmeasured
+
   - name: raspberry_pi4
     ram_gb: 4
+    usable_ram_fraction: 1.0
+    app_reserve_gb: 0.80      # headless: no UI stack to hold
     accelerator: cpu
-    compute_gflops: 10
     battery_wh: 0
-    usable_ram_fraction: 0.7
-    measured: false
+    prefill_tok_s: 12
+    decode_tok_s: 4
+    reference_params_b: 1.7
+    latency_source: unmeasured
+
   - name: laptop_cpu
     ram_gb: 16
+    usable_ram_fraction: 1.0
+    app_reserve_gb: 3.00
     accelerator: cpu
-    compute_gflops: 200
     battery_wh: 60
-    usable_ram_fraction: 0.7
-    measured: false
+    prefill_tok_s: 180
+    decode_tok_s: 32
+    reference_params_b: 1.7
+    latency_source: unmeasured
+
   - name: laptop_gpu
     ram_gb: 16
+    usable_ram_fraction: 1.0
+    app_reserve_gb: 3.00
     accelerator: gpu
-    compute_gflops: 8000
     battery_wh: 80
-    usable_ram_fraction: 0.7
-    measured: false
+    prefill_tok_s: 2200
+    decode_tok_s: 95
+    reference_params_b: 1.7
+    latency_source: unmeasured
