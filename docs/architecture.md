@@ -23,7 +23,7 @@ the "one flexible model" framing has no answer and this one does.
 | # | Subsystem | Code | Role |
 |---|---|---|---|
 | 1 | FORGE | `modelrig/forge.py` | slot-filling interview → Spec IR |
-| 2 | PLANNER | `modelrig/planner.py` | constrained search + validator → Build Plan IR |
+| 2 | PLANNER | `modelrig/planner/` | enumeration + seven predicates → Build Plan IR **or a refusal** ([detail](planner.md)) |
 | 3 | DATA FACTORY | `modelrig/data_factory.py` | seed-anchored amplification with collapse guardrails |
 | 4 | TRAINER | `modelrig/planes.py`, `modelrig/training_hf.py` | LoRA/QLoRA (heavy) or the offline classifier path |
 | 5 | PROVING GROUND | `modelrig/proving_ground.py` | seven axes, gate-enforced, repair loop |
