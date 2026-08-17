@@ -57,6 +57,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     va.add_argument("--warnings", action="store_true", help="Also print warnings")
 
+    pl = sub.add_parser("plan", help="Run the Planner on a Spec IR: a plan, or a refusal")
+    pl.add_argument("--spec", required=True, help="Path to a Spec IR (.json/.yaml)")
+    pl.add_argument("--tier", default="commercial",
+                    choices=["experimental", "commercial", "regulated"],
+                    help="Sets V and kappa, hence the refusal threshold theta*")
+    pl.add_argument("--explain", action="store_true",
+                    help="Show predicate order, counts and the decision arithmetic")
+
     bg = sub.add_parser("budget", help="Compute an on-device RAM budget")
     bg.add_argument("--device", default="android_tablet_4gb")
     bg.add_argument("--ram-gb", type=float, default=4.0)
@@ -305,6 +313,48 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _cmd_plan(args: argparse.Namespace) -> int:
+    from modelrig.ir import load_spec_ir
+    from modelrig.planner import Tier, default_catalog, ordered_predicates
+    from modelrig.planner import plan as run_plan
+    from modelrig.planner.costmodel import usd
+
+    try:
+        spec = load_spec_ir(args.spec)
+    except Exception as exc:  # noqa: BLE001 - report cleanly
+        print(f"error: could not load spec: {exc}")
+        return 2
+
+    outcome = run_plan(spec, default_catalog(), tier=Tier(args.tier))
+    print(f"spec_hash : {spec.hash}")
+    print(f"primitive : {spec.task_primitive.value}")
+    print(f"device    : {spec.device_target}")
+
+    if args.explain:
+        print(f"order     : {' -> '.join(p.name for p in ordered_predicates())}")
+        print(f"considered: {outcome.considered} candidate plans")
+        print(f"pred-evals: {outcome.predicate_evaluations} "
+              f"({outcome.predicate_evaluations / max(outcome.considered, 1):.1f} per candidate "
+              "— early exit means well under seven)")
+
+    if outcome.admitted:
+        p = outcome.plan
+        print(f"\nADMITTED  : {p.base_ref}")
+        print(f"  teacher : {p.teacher_ref or '-'}  ({p.distil_mode}, derived from tokenizer)")
+        print(f"  method  : {p.peft_method} r{p.rank}")
+        print(f"  quant   : {p.quantiser}/{p.bit_width}   target {p.target}")
+        print(f"  cost    : ${usd(outcome.cost_micro):.2f}")
+        print(f"  quality : {outcome.predicted_quality:.2f} >= theta* {outcome.threshold:.2f}")
+        print(f"  rule    : {p.provenance.get('rule')}")
+        if outcome.candidates:
+            print(f"  parallel: {len(outcome.candidates)} extra candidate(s), opt-in")
+        return 0
+
+    print()
+    print(outcome.refusal.render())
+    return 1
+
+
 def _cmd_budget(args: argparse.Namespace) -> int:
     from majestic.serving import plan_device_deployment, swap_latency_ms
 
@@ -349,6 +399,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_verify_graph(args)
     if args.command == "validate":
         return _cmd_validate(args)
+    if args.command == "plan":
+        return _cmd_plan(args)
     if args.command == "budget":
         return _cmd_budget(args)
     parser.print_help()
