@@ -39,6 +39,24 @@ class AbstentionPolicy(str, Enum):
     GUESS = "guess"        # answer anyway (rarely correct for regulated work)
 
 
+class ProfileSource(str, Enum):
+    """Where the target's device facts came from (Part 3 §14).
+
+    This is the field that decides whether ``P_lat`` may *promise* or only
+    *refuse*. Only a real measurement licenses a commitment.
+    """
+
+    PROBE = "probe"                        # the customer's actual device
+    DEVICE_LAB = "device_lab"              # our own reference unit
+    REFERENCE_DEVICE = "reference_device"  # another unit of the same class
+    INTERPOLATED = "interpolated"          # regression over accumulated probes
+    ASSUMED = "assumed"                    # a devices.yaml prior. A guess.
+
+    @property
+    def measured(self) -> bool:
+        return self in (ProfileSource.PROBE, ProfileSource.DEVICE_LAB)
+
+
 def _canonical(value: Any) -> Any:
     """Project a value into a deterministic, JSON-serialisable form."""
     if isinstance(value, Enum):
@@ -77,6 +95,18 @@ class SpecIR:
     io_schema: dict[str, Any] = field(default_factory=dict)
     languages: list[str] = field(default_factory=lambda: ["en"])
     device_target: str = "laptop_cpu"
+    #: Measured hardware facts from a device probe (Part 3 §8). Nullable: when
+    #: absent the planner falls back to the ``devices.yaml`` prior, which is a
+    #: guess and is marked as one.
+    device_profile: dict[str, Any] | None = None
+    #: Which rung of the verification ladder ``device_profile`` came from. The
+    #: single field that decides whether a latency claim may be a promise.
+    profile_source: ProfileSource = ProfileSource.ASSUMED
+    #: **Derived, never elicited** — the output of the memory equation once the
+    #: base is chosen. KV cache is linear in context, so on a tight device the
+    #: plan does not merely pick a smaller model, it CAPS the context, which caps
+    #: how many retrieved chunks the cartridge may use (§10).
+    context_budget: int | None = None
     offline_required: bool = False
     latency_budget_ms: int | None = None
     quality_gate: float = 0.9
@@ -108,6 +138,7 @@ class SpecIR:
             ("task_primitive", TaskPrimitive),
             ("abstention_policy", AbstentionPolicy),
             ("data_rights", DataRights),
+            ("profile_source", ProfileSource),
         ):
             if key in data and not isinstance(data[key], enum_cls):
                 data[key] = enum_cls(str(data[key]).lower())
@@ -217,6 +248,7 @@ __all__ = [
     "BuildPlanIR",
     "DataRights",
     "Licence",
+    "ProfileSource",
     "SpecIR",
     "content_hash",
     "load_spec_ir",
