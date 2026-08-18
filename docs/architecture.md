@@ -22,7 +22,7 @@ the "one flexible model" framing has no answer and this one does.
 
 | # | Subsystem | Code | Role |
 |---|---|---|---|
-| 1 | FORGE | `modelrig/forge.py` | slot-filling interview → Spec IR |
+| 1 | FORGE | `modelrig/forge/` | slot-filling interview → Spec IR, with the Planner scoring which questions are worth asking ([detail](forge.md)) |
 | 2 | PLANNER | `modelrig/planner/` | enumeration + seven predicates → Build Plan IR **or a refusal** ([detail](planner.md)) |
 | 3 | DATA FACTORY | `modelrig/data_factory.py` | seed-anchored amplification with collapse guardrails |
 | 4 | TRAINER | `modelrig/planes.py`, `modelrig/training_hf.py` | LoRA/QLoRA (heavy) or the offline classifier path |
@@ -39,6 +39,7 @@ documented separately in [device-verification.md](device-verification.md):
 | Weight compilation | `modelrig/weights.py` | hash pinning, BF16 merge, merged-vs-separate |
 | Quantisation format | `modelrig/quantformat.py` | SIMD flags select the format, not just the bit width |
 | Compounding device model | `modelrig/devicedb.py` | accumulated probes replace the device lab |
+| Seven resource dimensions | `modelrig/resources.py` | memory, storage, latency, compute, thermal, energy, network — six probed, one budget elicited, none guessed ([detail](forge.md)) |
 
 End to end: [`modelrig/pipeline.py`](../modelrig/pipeline.py).
 
