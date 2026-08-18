@@ -240,13 +240,80 @@ def check_architecture_conformance(catalogue: Catalogue | None = None) -> Confor
     return report
 
 
+# --------------------------------------------------------------------------- #
+def check_elicitation_conformance() -> ConformanceReport:
+    """Assert FORGE obeys the rules Part 4 states about asking questions.
+
+    These are the ones that fail *silently* when they drift: an interview that
+    quietly asks for something it could have probed still returns a spec, and
+    nothing downstream notices until the completion rate falls.
+    """
+    from modelrig.forge import slots as slot_table
+    from modelrig.forge.core import ATTRITION_GAMMA, completion_probability, value_ratio
+    from modelrig.planner.objective import Tier
+
+    report = ConformanceReport()
+
+    # §10: nothing measurable or computable may cost a question.
+    for problem in slot_table.validate_table():
+        report.checks_run += 1
+        report.add(check="slot_table", subject=problem.split(":")[0], source="P4-10",
+                   detail=problem)
+    report.checks_run += 1
+
+    # §9: the elicited set must stay a minority of the schema, or the economy
+    # that makes four questions enough has stopped holding.
+    report.checks_run += 1
+    asked = len(slot_table.MUST_ASK)
+    if asked > len(slot_table.SLOTS) / 2:
+        report.add(check="ask_economy", subject="slots.MUST_ASK", source="P4-09",
+                   severity="warning",
+                   detail=(f"{asked} of {len(slot_table.SLOTS)} slots are must-ask; "
+                           "the probe and the derivations are meant to carry most "
+                           "of the schema"))
+
+    # §4: gamma must leave a four-question interview mostly completing and a
+    # forty-question one essentially never completing. Outside that band the
+    # attrition model is not describing the thing it was fitted to.
+    report.checks_run += 1
+    if not (completion_probability(4) > 0.5 and completion_probability(40) < 0.05):
+        report.add(check="attrition_calibration", subject="ATTRITION_GAMMA",
+                   source="P4-04",
+                   detail=(f"gamma={ATTRITION_GAMMA} gives P(4)="
+                           f"{completion_probability(4):.2f} and P(40)="
+                           f"{completion_probability(40):.3f}; the shape the model "
+                           "was fitted to is P(4) > 0.5 and P(40) < 0.05"))
+
+    # §4-§6: raising kappa must make the system BOTH refuse more and ask more.
+    # If these ever move in opposite directions, one of the two is miscalibrated
+    # and the regulated tier becomes the permissive one.
+    report.checks_run += 1
+    tiers = [Tier.EXPERIMENTAL, Tier.COMMERCIAL, Tier.REGULATED]
+    lambdas = [value_ratio(t) for t in tiers]
+    thetas = [objective_threshold(t) for t in tiers]
+    if lambdas != sorted(lambdas) or thetas != sorted(thetas):
+        report.add(check="caution_moves_together", subject="Tier", source="P4-04",
+                   detail=(f"lambda={[round(x, 2) for x in lambdas]} and "
+                           f"theta*={[round(x, 2) for x in thetas]} must both rise "
+                           "with trust damage: more refusals AND more questions"))
+
+    return report
+
+
+def objective_threshold(tier, build_cost_micro: int = 40_000_000) -> float:
+    from modelrig.planner.objective import refusal_threshold
+
+    return refusal_threshold(build_cost_micro, tier)
+
+
 def run_all(catalogue: Catalogue | None = None) -> ConformanceReport:
-    """Both checks, merged into one report."""
+    """Every check, merged into one report."""
     compat = check_model_compatibility(catalogue)
     arch = check_architecture_conformance(catalogue)
+    forge = check_elicitation_conformance()
     merged = ConformanceReport(
-        findings=compat.findings + arch.findings,
-        checks_run=compat.checks_run + arch.checks_run,
+        findings=compat.findings + arch.findings + forge.findings,
+        checks_run=compat.checks_run + arch.checks_run + forge.checks_run,
     )
     logger.info(
         "conformance: %d checks, %d errors, %d warnings",
