@@ -132,6 +132,23 @@ def test_far_extrapolation_reverts_a_measured_profile_to_a_bound():
     assert "one decade" in far.reason
 
 
+def test_an_unrecorded_bracket_is_unknown_not_zero_width():
+    """A profile that never recorded which sizes it benchmarked cannot have its
+    reach checked, so it cannot promise.
+
+    Treating the missing bracket as a zero-width one at the origin instead
+    produced reach figures in the billions and an unreadable refusal.
+    """
+    blind = _profile(probe_lo_mb=0, probe_hi_mb=0)
+    assert blind.calibration.bracket_recorded is False
+    assert blind.calibration.extrapolation_factor(1120 * MB) == float("inf")
+
+    verdict = assess_latency(blind, 1120 * MB, tokens_out=60)
+    assert verdict.may_promise is False
+    assert "did not record the model sizes" in verdict.reason
+    assert "1.0x" not in verdict.reason
+
+
 # =========================================================================== #
 # §8 — thermal derate
 
