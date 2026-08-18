@@ -65,6 +65,24 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--explain", action="store_true",
                     help="Show predicate order, counts and the decision arithmetic")
 
+    pb = sub.add_parser(
+        "probe", help="Turn two on-device benchmarks into a measured DeviceProfile"
+    )
+    pb.add_argument("--device-id", required=True, help="Stable identifier for the unit")
+    pb.add_argument("--small-mb", type=int, default=200, help="Smaller probe model size")
+    pb.add_argument("--large-mb", type=int, default=400, help="Larger probe model size")
+    pb.add_argument("--small-toks", type=float, required=True, help="tok/s at --small-mb")
+    pb.add_argument("--large-toks", type=float, required=True, help="tok/s at --large-mb")
+    pb.add_argument("--sustained-toks", type=float,
+                    help="tok/s at --large-mb after the 180 s sustained phase")
+    pb.add_argument("--ram-total-mb", type=int, default=4000)
+    pb.add_argument("--ram-free-mb", type=int, required=True,
+                    help="FREE RAM, measured — not total")
+    pb.add_argument("--simd", default="neon,dotprod",
+                    help="Comma-separated SIMD flags; selects the quantisation format")
+    pb.add_argument("--accelerator", default="cpu")
+    pb.add_argument("--out", help="Write the DeviceProfile here (.json)")
+
     bg = sub.add_parser("budget", help="Compute an on-device RAM budget")
     bg.add_argument("--device", default="android_tablet_4gb")
     bg.add_argument("--ram-gb", type=float, default=4.0)
@@ -355,6 +373,57 @@ def _cmd_plan(args: argparse.Namespace) -> int:
     return 1
 
 
+def _cmd_probe(args: argparse.Namespace) -> int:
+    from modelrig.probe import MB, ProbePoint, build_profile
+    from modelrig.quantformat import select_format, sweep_plan
+
+    simd = [s.strip().lower() for s in args.simd.split(",") if s.strip()]
+    points = [
+        ProbePoint(args.small_mb * MB, args.small_toks),
+        ProbePoint(args.large_mb * MB, args.large_toks),
+    ]
+    try:
+        profile = build_profile(
+            args.device_id, points,
+            ram_total_mb=args.ram_total_mb, ram_free_mb=args.ram_free_mb,
+            sustained_tokens_per_s=args.sustained_toks,
+            burst_reference_tokens_per_s=args.large_toks,
+            simd=simd, accelerator=args.accelerator,
+        )
+    except Exception as exc:  # noqa: BLE001 - report cleanly
+        print(f"probe failed: {exc}")
+        return 2
+
+    print(f"device_id     : {profile.device_id}")
+    print(f"BW_eff        : {profile.bw_eff_gbps:.2f} GB/s")
+    print(f"overhead      : {profile.overhead_ms_per_token:.2f} ms/token")
+    print(f"thermal derate: {profile.thermal_derate_180s:.2f}"
+          f"{'  (no sustained phase run)' if args.sustained_toks is None else ''}")
+    print(f"free RAM      : {profile.ram_free_mb} MB "
+          f"(usable {profile.usable_ram_mb} MB after headroom)")
+    print(f"tier          : {profile.tier.name.lower()} — "
+          f"{'may promise' if profile.tier.may_promise else 'refusal only'}")
+
+    choice = select_format(simd, args.accelerator)
+    print(f"\nquant format  : {choice.name} ({choice.evidence})")
+    print(f"  {choice.reason}")
+    if choice.rejected:
+        print(f"  unavailable : {', '.join(choice.rejected)}")
+    print(f"  sweep next  : {', '.join(sweep_plan(simd, args.accelerator)['formats'])}")
+
+    print("\npredicted sustained decode across the catalogue:")
+    for mb in (400, 800, 1120, 2600, 5300):
+        rate = profile.tokens_per_s(mb * MB)
+        reach = profile.calibration.extrapolation_factor(mb * MB)
+        flag = "" if reach <= 10 else f"  <- {reach:.1f}x outside the probe bracket"
+        print(f"  {mb:>5} MB  {rate:6.2f} tok/s{flag}")
+
+    if args.out:
+        profile.save(args.out)
+        print(f"\nwrote {args.out}")
+    return 0
+
+
 def _cmd_budget(args: argparse.Namespace) -> int:
     from majestic.serving import plan_device_deployment, swap_latency_ms
 
@@ -401,6 +470,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_validate(args)
     if args.command == "plan":
         return _cmd_plan(args)
+    if args.command == "probe":
+        return _cmd_probe(args)
     if args.command == "budget":
         return _cmd_budget(args)
     parser.print_help()
