@@ -14,14 +14,27 @@ CAT = default_catalog()
 
 
 def _profile(**over) -> dict:
+    """A fully probed device: decode calibrated AND prefill timed (§13.4)."""
     base = dict(
         device_id="sm-a536b-probe-8f3a", ram_total_mb=4000, ram_free_mb=2600,
         bw_eff_gbps=9.24, overhead_ms_per_token=2.16, thermal_derate_180s=0.6,
         simd=("neon", "dotprod"), probe_lo_mb=200, probe_hi_mb=400,
         source=ProbeSource.PROBE,
+        # Prefill timed on device: ~50 tok/s at the 1.7B reference.
+        prefill_ref_tok_s=50.0, reference_params=1_720_000_000,
+        storage_free_mb=8000, power_draw_w=3.5,
     )
     base.update(over)
     return DeviceProfile(**base).to_dict()
+
+
+def _decode_only_profile(**over) -> dict:
+    """A probe that calibrated decode but never timed a prefill."""
+    d = _profile(**over)
+    d["prefill_ref_tok_s"] = None
+    d["reference_params"] = None
+    d["flops_eff"] = None
+    return d
 
 
 def _spec(**over) -> SpecIR:
@@ -78,11 +91,27 @@ def test_without_a_probe_the_latency_predicate_refuses():
 
 def test_with_a_probe_the_latency_predicate_may_promise():
     """The deadlock is resolved by measurement, not by buying phones."""
-    spec = _spec(device_profile=_profile(), profile_source=ProfileSource.PROBE)
+    spec = _spec(latency_budget_ms=60_000, device_profile=_profile(),
+                 profile_source=ProfileSource.PROBE)
     result = P_lat(spec, _cand(), CAT)
     assert result.ok is True
     assert result.detail["measured"] is True
-    assert result.detail["may_promise"] is True
+    assert result.detail["prefill_measured"] is True
+
+
+def test_a_decode_only_probe_cannot_promise_a_prefill_bound_workload():
+    """Part 4 §13.3: half a measurement does not license a promise.
+
+    The two-point calibration solves the bandwidth-bound decode term only. For a
+    document workload prefill dominates, so a decode-only probe must fall back to
+    a bound rather than assert a latency it never measured.
+    """
+    spec = _spec(latency_budget_ms=60_000, device_profile=_decode_only_profile(),
+                 profile_source=ProfileSource.PROBE)
+    result = P_lat(spec, _cand(), CAT)
+    assert result.ok is False
+    assert "decode was measured but prefill was not" in result.reason
+    assert "time a prefill" in result.remedy
 
 
 def test_a_measured_refusal_reports_the_thermal_derate():
@@ -91,7 +120,22 @@ def test_a_measured_refusal_reports_the_thermal_derate():
     result = P_lat(spec, _cand(), CAT)
     assert result.ok is False
     assert "thermal derate" in result.reason
-    assert "measured, so it will not improve" in result.remedy
+    assert "prefill" in result.reason and "decode" in result.reason
+
+
+def test_a_prefill_bound_refusal_recommends_shortening_the_input():
+    """§13.4's derived lever: cropping beats dropping a base tier.
+
+    Prefill scales linearly with input length and costs no quality on the task
+    itself, so when it dominates the right move is to shorten the input.
+    """
+    spec = _spec(latency_budget_ms=2000, expected_input_tokens=1000,
+                 expected_output_tokens=80, device_profile=_profile(),
+                 profile_source=ProfileSource.PROBE)
+    result = P_lat(spec, _cand(), CAT)
+    assert result.ok is False
+    assert result.detail["prefill_share"] > 0.5
+    assert "shorten the input" in result.remedy
 
 
 def test_an_interpolated_profile_cannot_promise():
