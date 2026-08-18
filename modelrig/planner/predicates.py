@@ -531,28 +531,54 @@ def _p_lat(spec: SpecIR, plan: Any, catalog: Catalog) -> PredicateResult:
 
         m_w = weight_bytes(model, catalog, plan.quantiser)
         prefill_s = _prefill_seconds(model, catalog, spec, tokens_in)
-        verdict = assess_latency(profile, m_w, tokens_out, prefill_s)
+        verdict = assess_latency(
+            profile, m_w, tokens_out, prefill_s,
+            params=model.params, tokens_in=tokens_in,
+        )
         detail = {
             **verdict.as_dict(), "budget_ms": float(spec.latency_budget_ms),
             "profile_source": profile.source.value,
-            "thermal_derate": profile.thermal_derate_180s, "measured": True,
+            "thermal_derate": profile.thermal_derate_180s,
+            "measured": verdict.may_promise,
         }
         total_ms = verdict.seconds_total * 1000.0
+
+        # A decode-only measurement cannot promise a prefill-dominated workload.
+        if not verdict.may_promise:
+            return PredicateResult(
+                False, "P_lat",
+                reason=f"cannot promise {total_ms / 1000:.1f} s: {verdict.reason}",
+                detail=detail,
+                remedy=(
+                    "time a prefill of known length on the device — prefill is "
+                    "compute-bound and needs its own measurement (§13.4)"
+                ),
+            )
         if total_ms <= float(spec.latency_budget_ms):
             return PredicateResult(True, "P_lat", detail=detail)
+
+        dominant = "prefill" if verdict.prefill_dominates else "decode"
         return PredicateResult(
             False, "P_lat",
             reason=(
                 f"{model.ref} measured on {profile.device_id}: "
-                f"{verdict.seconds_total:.1f} s against a "
-                f"{float(spec.latency_budget_ms) / 1000:.1f} s budget "
-                f"({verdict.tokens_per_s:.1f} tok/s sustained after a "
-                f"{profile.thermal_derate_180s:.2f} thermal derate)"
+                f"{verdict.seconds_total:.1f} s "
+                f"({verdict.prefill_s:.1f} s prefill over {tokens_in} tokens + "
+                f"{verdict.decode_s:.1f} s decode over {tokens_out}) against a "
+                f"{float(spec.latency_budget_ms) / 1000:.1f} s budget — "
+                f"{dominant} dominates, after a "
+                f"{profile.thermal_derate_180s:.2f} thermal derate"
             ),
             detail=detail,
             remedy=(
-                "relax the latency budget, shorten the input, or move down the size "
-                "ladder — this figure is measured, so it will not improve on its own"
+                # §13.4's derived lever: when prefill dominates, shortening the
+                # input reduces it linearly and costs no quality on the task.
+                f"shorten the input below {tokens_in} tokens — prefill is "
+                f"{verdict.prefill_share:.0%} of this workload and scales with it, "
+                "so cropping or pre-filtering beats dropping a base tier"
+                if verdict.prefill_dominates else
+                "relax the budget or move down the size ladder — this figure is "
+                "measured, so it will not improve on its own"
             ),
         )
 
@@ -622,8 +648,15 @@ def _p_lat(spec: SpecIR, plan: Any, catalog: Catalog) -> PredicateResult:
 
 
 def _token_shape(spec: SpecIR) -> tuple[int, int]:
+    """The workload shape. First-class fields win over the io_schema fallback.
+
+    Part 4 §17: ``expected_input_tokens`` is a first-order latency driver, so it
+    is a slot in its own right rather than a key buried in ``io_schema``.
+    """
     io = spec.io_schema if isinstance(spec.io_schema, dict) else {}
-    return int(io.get("tokens_in", 512)), int(io.get("tokens_out", 64))
+    tokens_in = spec.expected_input_tokens or int(io.get("tokens_in", 512))
+    tokens_out = spec.expected_output_tokens or int(io.get("tokens_out", 64))
+    return tokens_in, tokens_out
 
 
 def _prefill_seconds(model: ModelSpec, catalog: Catalog, spec: SpecIR, tokens_in: int) -> float:
@@ -720,9 +753,117 @@ P_cost = _P("P_cost", cost=5.0, pass_rate=0.85, soundness=Soundness.SOFT, fn=_p_
 
 
 # =========================================================================== #
+# P_storage — Part 4 §13.2
+# =========================================================================== #
+def _p_storage(spec: SpecIR, plan: Any, catalog: Catalog) -> PredicateResult:
+    """Storage binds independently of memory, in **both** directions.
+
+    A 4 GB-RAM phone with 8 GB free storage can hold an artefact it cannot load;
+    a device with ample RAM and a full disk cannot install one. Two predicates,
+    neither implying the other.
+    """
+    from modelrig import resources
+
+    profile = _probe_profile(spec)
+    free = (profile.storage_free_mb * MB) if profile and profile.storage_free_mb else 0
+    if not free:
+        return PredicateResult(
+            True, "P_storage",
+            detail={"note": "no measured free storage; probe it to enable this check"},
+        )
+
+    model = catalog.model(plan.base_ref)
+    io = spec.io_schema if isinstance(spec.io_schema, dict) else {}
+    s = resources.storage(
+        artefact=weight_bytes(model, catalog, plan.quantiser),
+        n_chunks=int(io.get("index_chunks", 0)),
+        index_dim=int(io.get("index_dim", 768)),
+        index_quantised=bool(io.get("index_quantised", False)),
+    )
+    detail = {
+        "artefact_mb": round(s.artefact / MB, 1), "index_mb": round(s.index / MB, 1),
+        "total_mb": round(s.total / MB, 1),
+        "usable_mb": round(free * resources.STORAGE_SAFETY / MB, 1),
+        "dominant": s.dominant,
+    }
+    if resources.storage_fits(s, free):
+        return PredicateResult(True, "P_storage", detail=detail)
+    return PredicateResult(
+        False, "P_storage",
+        reason=(
+            f"artefact plus index needs {s.total / MB:.0f} MB but only "
+            f"{free * resources.STORAGE_SAFETY / MB:.0f} MB is usable "
+            f"({s.dominant} dominates; phones behave badly near full storage)"
+        ),
+        detail=detail,
+        remedy=(
+            "quantise the retrieval index to int8 — a 4x reduction for negligible "
+            "retrieval loss, and usually the cheapest win available"
+            if s.dominant == "index" else "drop to a smaller base"
+        ),
+    )
+
+
+P_storage = _P("P_storage", cost=2.0, pass_rate=0.9, soundness=Soundness.HARD,
+               fn=_p_storage)
+
+
+# =========================================================================== #
+# P_energy — Part 4 §13.6
+# =========================================================================== #
+def _p_energy(spec: SpecIR, plan: Any, catalog: Catalog) -> PredicateResult:
+    """A day's volume must fit inside one charge, with margin.
+
+    Only checked when the spec declares a daily volume — a mains-powered target
+    has no battery to run down.
+    """
+    from modelrig import resources
+    from modelrig.probe import assess_latency
+
+    volume = spec.expected_daily_volume
+    profile = _probe_profile(spec)
+    if not volume or profile is None or not profile.measured:
+        return PredicateResult(
+            True, "P_energy",
+            detail={"note": "no declared daily volume or no measured device"},
+        )
+
+    model = catalog.model(plan.base_ref)
+    tokens_in, tokens_out = _token_shape(spec)
+    m_w = weight_bytes(model, catalog, plan.quantiser)
+    verdict = assess_latency(profile, m_w, tokens_out, 0.0,
+                             params=model.params, tokens_in=tokens_in)
+    e = resources.energy(
+        verdict.seconds_total,
+        power_draw_w=profile.power_draw_w or resources.DEFAULT_POWER_DRAW_W,
+    )
+    detail = {**e.as_dict(), "daily_volume": volume,
+              "battery_share": round(e.battery_share(volume), 3),
+              "power_measured": profile.power_draw_w is not None}
+    if resources.energy_fits(e, volume):
+        return PredicateResult(True, "P_energy", detail=detail)
+    return PredicateResult(
+        False, "P_energy",
+        reason=(
+            f"{e.requests_per_charge:.0f} requests per charge against a "
+            f"{volume}/day volume — {e.battery_share(volume):.0%} of a full battery, "
+            "before any other app runs"
+        ),
+        detail=detail,
+        remedy="shorten the input, use a smaller base, or plan for mid-day charging",
+    )
+
+
+P_energy = _P("P_energy", cost=4.0, pass_rate=0.95, soundness=Soundness.SOFT,
+              fn=_p_energy)
+
+
+# =========================================================================== #
 # Ordering (§4)
 # =========================================================================== #
-ALL_PREDICATES: tuple[_P, ...] = (P_tok, P_seed, P_lic, P_ram, P_off, P_lat, P_cost)
+ALL_PREDICATES: tuple[_P, ...] = (
+    P_tok, P_seed, P_lic, P_ram, P_off, P_lat, P_cost, P_storage, P_energy,
+)
 
 #: §16's partition. Report these separately; never blend them into one number.
 HARD: tuple[str, ...] = tuple(p.name for p in ALL_PREDICATES if p.soundness is Soundness.HARD)
