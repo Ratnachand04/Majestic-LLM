@@ -86,7 +86,15 @@ stage    : gate1  (no planning, no data, no GPU)
 - **A latency promise is never made from unmeasured hardware.** Effective
   throughput runs at 30–60% of peak; a planner that interpolates it is
   fabricating a commitment, so `P_lat` refuses unless the estimate is explicitly
-  accepted.
+  accepted — or until a **device probe** measures the target
+  ([detail](docs/device-verification.md)).
+- **The device certifies the model, not the vendor.** Two short benchmarks on the
+  customer's own hardware calibrate `t = S/BW_eff + c` exactly, which predicts
+  latency for the whole catalogue on that device. All promises use the
+  *sustained* rate, after the thermal derate.
+- **Merging happens in BF16, never into the 4-bit training base.** There are two
+  separate quantisations in the pipeline and conflating them loses most of the
+  fine-tune while every step reports success.
 - **Refusal is a return value, not an exception** — with a minimal witness and
   ordered remedies. Even a *free* build is refused below θ\* = (C+κ)/(V+κ),
   because the damage of shipping a bad model is not the compute you burned.
@@ -1076,6 +1084,10 @@ majestic-llm/
 │   ├── quantisation.py · grammar.py   calibration, flip rate, constrained decoding
 │   ├── cartridge.py · registry.py  content-addressed artefacts + lineage
 │   ├── feasibility.py              KV-cache-aware device predictor
+│   ├── probe.py                    two-point calibration; the verification ladder
+│   ├── weights.py                  hash pinning, BF16 merge, merged-vs-separate
+│   ├── quantformat.py              SIMD flags select the quantisation format
+│   ├── devicedb.py                 the compounding device model
 │   ├── conformance.py              model compatibility + architecture self-check
 │   ├── pipeline.py                 end to end, with the repair loop
 │   └── buildspec · compiler · planes · classifier · datasets · training_hf
