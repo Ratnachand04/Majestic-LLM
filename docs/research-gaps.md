@@ -15,7 +15,7 @@ addresses it today and what is still missing.
 | **GAP-07** | Cross-tokenizer logit distillation | **Avoided safely** — the planner defaults to sequence-level KD and Gate 2 refuses cross-family `logit_kd` outright; `cli validate` warns that no `llama`/`smollm` teacher exists | Either a validated cross-tokenizer method, or accept the single-vendor teacher dependency the warning exposes |
 | **GAP-08** | Automated licence-chain resolution | **Addressed** — [`modelrig/licence.py`](../modelrig/licence.py) composes base, teacher, data rights and jurisdiction, and refuses illegal combinations before training | Real legal review of the rule table; more jurisdictions |
 | **GAP-09** | An eval a non-technical customer will trust | **Partially** — the scorecard carries samples and honest failure cases | Customer trust and acceptance measured as a first-class product metric |
-| **GAP-10** | Adapter-swap latency and thermals on real mobile hardware | **Flagged, not measured** — every device profile carries `measured: false`, and estimates are labelled unmeasured throughout | The physical device lab. Until then on-device latency, swap time and battery are design targets, not results |
+| **GAP-10** | Adapter-swap latency and thermals on real mobile hardware | **Route out found** — the [device probe](device-verification.md) makes the customer's own hardware the measurement instrument: two benchmarks calibrate `t = S/BW + c` exactly, `P_lat` may then promise, and `devices.yaml` is demoted to priors | Actual probe deployments. **Adapter-swap latency specifically is still unmeasured**, and the SIMD→format mapping is still folklore |
 
 ## How to read this
 
