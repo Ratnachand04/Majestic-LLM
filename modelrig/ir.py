@@ -107,6 +107,19 @@ class SpecIR:
     #: plan does not merely pick a smaller model, it CAPS the context, which caps
     #: how many retrieved chunks the cartridge may use (§10).
     context_budget: int | None = None
+    #: --- Part 4 §17: the schema gap. ``expected_input_tokens`` is a FIRST-ORDER
+    #: latency driver, because prefill is compute-bound and scales with it. Its
+    #: absence is how a build passes Gate 2 and then disappoints in the field:
+    #: costing decode alone understates document-task latency by roughly 3x.
+    #:
+    #: Derive it wherever possible — tokenise the customer's sample documents and
+    #: take the 95th percentile — which turns an elicited slot into a derived one
+    #: and saves a question.
+    expected_input_tokens: int | None = None
+    #: Derivable from the size of ``io_schema``'s output schema.
+    expected_output_tokens: int | None = None
+    #: Needed for the energy dimension: requests per charge against daily volume.
+    expected_daily_volume: int | None = None
     offline_required: bool = False
     latency_budget_ms: int | None = None
     quality_gate: float = 0.9
