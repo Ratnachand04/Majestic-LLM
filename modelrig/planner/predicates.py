@@ -326,24 +326,52 @@ def _p_ram(spec: SpecIR, plan: Any, catalog: Catalog) -> PredicateResult:
     context = _context_of(spec, model)
     m = memory(model, catalog, quantiser=plan.quantiser, context=context, device=device)
 
-    if m.total <= device.free_ram:
+    # A probe supersedes the prior, but the two measure different things and must
+    # not be mixed:
+    #   prior  — free_ram is the whole device, and app_reserve (M_app) is a
+    #            MODELLED term that has to be added to the model's own footprint.
+    #   probe  — ram_free_mb is FREE ram, already net of the OS and other apps,
+    #            so adding M_app again would double-count it. The headroom factor
+    #            covers the remaining §13 gap: the probe ran idle, production
+    #            does not.
+    profile = _probe_profile(spec)
+    if profile is not None and profile.measured:
+        budget = profile.usable_ram_mb * MB
+        needed = m.model_total
+        ram_source = f"{profile.source.value} (x{profile.headroom_factor:g} headroom)"
+    else:
+        budget = device.free_ram
+        needed = m.total
+        ram_source = "prior"
+
+    if needed <= budget:
         return PredicateResult(
             True, "P_ram",
-            detail={**m.as_mb(), "free_ram_mb": round(device.free_ram / MB, 1),
-                    "headroom_mb": round((device.free_ram - m.total) / MB, 1)},
+            detail={**m.as_mb(), "free_ram_mb": round(budget / MB, 1),
+                    "needed_mb": round(needed / MB, 1),
+                    "headroom_mb": round((budget - needed) / MB, 1),
+                    "ram_source": ram_source,
+                    "context_budget": context_budget(
+                        model, catalog, quantiser=plan.quantiser, device=device,
+                        free_ram_override=budget,
+                        include_app_reserve=ram_source == "prior",
+                    )},
         )
 
-    over = m.total - device.free_ram
+    over = needed - budget
     return PredicateResult(
         False, "P_ram",
         reason=(
-            f"{model.ref} at {plan.quantiser} needs {m.total / MB:.0f} MB "
+            f"{model.ref} at {plan.quantiser} needs {needed / MB:.0f} MB "
             f"(weights {m.weights / MB:.0f} + KV {m.kv_cache / MB:.0f} at {context} ctx "
-            f"+ runtime {(m.embedder + m.runtime) / MB:.0f} + app {m.app_reserve / MB:.0f}) "
-            f"but {device.name} has {device.free_ram / MB:.0f} MB free — "
-            f"over by {over / MB:.0f} MB"
+            f"+ runtime {(m.embedder + m.runtime) / MB:.0f}"
+            + (f" + app {m.app_reserve / MB:.0f}" if ram_source == "prior" else "")
+            + f") but {device.name} has {budget / MB:.0f} MB free "
+            f"[{ram_source}] — over by {over / MB:.0f} MB"
         ),
-        detail={**m.as_mb(), "over_mb": round(over / MB, 1), "context": context},
+        detail={**m.as_mb(), "over_mb": round(over / MB, 1), "context": context,
+                "needed_mb": round(needed / MB, 1), "ram_source": ram_source,
+                "free_ram_mb": round(budget / MB, 1)},
         remedy=(
             f"reduce context below {context}, or drop to the next smaller base"
             if m.kv_cache > m.weights // 3 else "drop to the next smaller base"
@@ -474,9 +502,59 @@ def latency(
     )
 
 
+def _probe_profile(spec: SpecIR):
+    """The measured profile attached to the spec, if a probe has been run."""
+    if not spec.device_profile:
+        return None
+    from modelrig.probe import DeviceProfile
+
+    try:
+        return DeviceProfile.from_dict(spec.device_profile)
+    except Exception:  # noqa: BLE001 - a malformed profile is simply absent
+        return None
+
+
 def _p_lat(spec: SpecIR, plan: Any, catalog: Catalog) -> PredicateResult:
     if spec.latency_budget_ms is None:
         return PredicateResult(True, "P_lat", detail={"note": "no latency budget declared"})
+
+    model = catalog.model(plan.base_ref)
+    tokens_in, tokens_out = _token_shape(spec)
+
+    # --- Part 3 §9: a probe moves this predicate from Tier 1 to Tier 3 ----- #
+    # With measured hardware facts P_lat may PROMISE, not merely refuse. This is
+    # what resolves the devices.yaml deadlock without buying twenty phones: the
+    # customer's own device becomes the measurement instrument.
+    profile = _probe_profile(spec)
+    if profile is not None and profile.measured:
+        from modelrig.probe import assess_latency
+
+        m_w = weight_bytes(model, catalog, plan.quantiser)
+        prefill_s = _prefill_seconds(model, catalog, spec, tokens_in)
+        verdict = assess_latency(profile, m_w, tokens_out, prefill_s)
+        detail = {
+            **verdict.as_dict(), "budget_ms": float(spec.latency_budget_ms),
+            "profile_source": profile.source.value,
+            "thermal_derate": profile.thermal_derate_180s, "measured": True,
+        }
+        total_ms = verdict.seconds_total * 1000.0
+        if total_ms <= float(spec.latency_budget_ms):
+            return PredicateResult(True, "P_lat", detail=detail)
+        return PredicateResult(
+            False, "P_lat",
+            reason=(
+                f"{model.ref} measured on {profile.device_id}: "
+                f"{verdict.seconds_total:.1f} s against a "
+                f"{float(spec.latency_budget_ms) / 1000:.1f} s budget "
+                f"({verdict.tokens_per_s:.1f} tok/s sustained after a "
+                f"{profile.thermal_derate_180s:.2f} thermal derate)"
+            ),
+            detail=detail,
+            remedy=(
+                "relax the latency budget, shorten the input, or move down the size "
+                "ladder — this figure is measured, so it will not improve on its own"
+            ),
+        )
 
     device = catalog.device(spec.device_target)
     accepts_estimates = bool(
@@ -497,13 +575,12 @@ def _p_lat(spec: SpecIR, plan: Any, catalog: Catalog) -> PredicateResult:
             ),
             detail={"latency_source": device.latency_source, "measured": False},
             remedy=(
-                "run the device lab for this target, or set "
+                "run the device probe on the target — two short benchmarks calibrate "
+                "latency for the whole catalogue — or set "
                 "io_schema.accept_unmeasured_latency=true to accept an estimate explicitly"
             ),
         )
 
-    model = catalog.model(plan.base_ref)
-    tokens_in, tokens_out = _token_shape(spec)
     est = latency(model, catalog, quantiser=plan.quantiser, device=device,
                   tokens_in=tokens_in, tokens_out=tokens_out)
 
@@ -547,6 +624,50 @@ def _p_lat(spec: SpecIR, plan: Any, catalog: Catalog) -> PredicateResult:
 def _token_shape(spec: SpecIR) -> tuple[int, int]:
     io = spec.io_schema if isinstance(spec.io_schema, dict) else {}
     return int(io.get("tokens_in", 512)), int(io.get("tokens_out", 64))
+
+
+def _prefill_seconds(model: ModelSpec, catalog: Catalog, spec: SpecIR, tokens_in: int) -> float:
+    """Prefill time, taken from the device prior.
+
+    A probe calibrates DECODE, which is bandwidth-bound and therefore the term the
+    two-point model captures. Prefill is compute-bound and needs its own
+    measurement, so until the probe sweeps it too this falls back to the prior's
+    prefill rate — and the mixed provenance is recorded rather than hidden.
+    """
+    try:
+        device = catalog.device(spec.device_target)
+    except Exception:  # noqa: BLE001
+        return 0.0
+    est = latency(model, catalog, quantiser="q4_k_m", device=device,
+                  tokens_in=tokens_in, tokens_out=0)
+    return 0.0 if est.prefill_ms == math.inf else est.prefill_ms / 1000.0
+
+
+def context_budget(
+    model: ModelSpec, catalog: Catalog, *, quantiser: str, device: DeviceSpec,
+    free_ram_override: int | None = None, batch: int = 1,
+    include_app_reserve: bool = True,
+) -> int:
+    """Derive the maximum context the device can hold (§10).
+
+    The coordinate most often missed. KV cache is linear in context length, so on
+    a tight device the plan does not merely pick a smaller model — it **caps the
+    context**, which caps how many retrieved chunks the cartridge may use, which
+    feeds back into the retrieval design.
+
+    **Device constraints propagate upward into task design**, not only downward
+    into model size. This is derived, never elicited.
+    """
+    free = free_ram_override if free_ram_override is not None else device.free_ram
+    # A measured free-RAM figure is already net of the application, so M_app must
+    # not be subtracted a second time.
+    reserve = device.app_reserve if include_app_reserve else 0
+    spare = free - reserve - weight_bytes(model, catalog, quantiser) \
+        - EMBEDDER_BYTES - RUNTIME_BYTES
+    if spare <= 0:
+        return 0
+    per_token = model.kv_bytes_per_token() * batch
+    return min(int(spare // per_token), model.max_context)
 
 
 P_lat = _P("P_lat", cost=4.0, pass_rate=0.6, soundness=Soundness.SOFT, fn=_p_lat)
