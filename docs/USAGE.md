@@ -71,9 +71,14 @@ python -m cli.main primitives
 ```
 
 `forge` prints the slots it filled by itself and the few questions still worth
-asking, ranked by information gain. It refuses to guess an ambiguous slot —
-"works offline" meaning *always* versus *survives a dropout* is asked, not
-assumed.
+asking. The ranking is not the parser's own uncertainty: each candidate answer is
+pushed through the **Planner** and the gain is how far the resulting plan moves,
+so a slot whose every answer yields the same build scores zero and is never
+asked, however ambiguous it looked. It still refuses to *guess* an ambiguous slot
+— "works offline" meaning *always* versus *survives a dropout* is asked, not
+assumed. Add `--explain` to see the questions it declined to ask and why, and
+`--tier regulated` to raise Λ so marginal questions become worth the attrition
+([detail](forge.md)).
 
 `compile` prints each gate, the plan chosen under the device cap, the seven-axis
 scorecard, the answer-flip rate against FP16, and the cartridge id. When a build
@@ -89,21 +94,30 @@ stage     : gate1  (no planning, no data, no GPU)
 
 Programmatically:
 ```python
-from modelrig.forge import Forge
-from modelrig.ir import DataRights
+from modelrig.forge import Interviewer
 from modelrig.pipeline import MajesticCompiler
+from modelrig.probe import build_profile
 
-forge = Forge()
-state = forge.parse("Classify tickets by sentiment on an android phone")
-state = forge.answer(state, data_rights=DataRights.CUSTOMER_OWNED,
-                     seed_data_count=120, offline_required=True)
-spec = forge.to_spec(state)
+iv = Interviewer().conduct(
+    "Classify tickets by sentiment on an android phone",
+    answers={"data_rights": "customer_owned", "seed_data_count": 120,
+             "offline_required": True},
+    # Optional. One round trip settles the whole device group without a
+    # question, and is what lets P_lat promise rather than only refuse.
+    device_profile=build_profile(...).to_dict(),
+)
+iv.questions            # what is still worth asking, best first
+iv.report()             # every question's arithmetic, and every omission's proof
 
-result = MajesticCompiler().compile(spec, corpus)
+result = MajesticCompiler().compile(iv.spec, corpus)
 print(result.admitted, result.refusal)
 for axis in result.scorecard.axes:
     print(axis.name, axis.score, axis.passed)
 ```
+
+The lower-level `Forge().parse/answer/to_spec` surface still exists and is what
+the `Interviewer` drives; use it when you want the slot filling without the
+Planner in the loop.
 
 ## 4b. Verify a Fabric graph before it runs
 
