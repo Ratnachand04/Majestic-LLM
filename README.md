@@ -47,7 +47,7 @@ FORGE -> Spec IR -> [GATE 1] -> PLANNER -> Build Plan IR -> [GATE 2]
 
 | # | Subsystem | What it does |
 |---|---|---|
-| 1 | **FORGE** | slot-filling interview; asks four questions, not forty; refuses to guess an ambiguous slot |
+| 1 | **FORGE** | slot-filling interview that asks four questions, not forty — and picks them by pushing candidate answers through the **Planner** and keeping the ones that move the plan ([detail](docs/forge.md)) |
 | 2 | **PLANNER** | seven hard predicates over an enumerable plan space; returns a plan **or a refusal with a witness**. Deterministic — no LLM on the common path ([detail](docs/planner.md)) |
 | 3 | **DATA FACTORY** | seed-anchored amplification behind blocking QA gates; refuses below the real-seed floor |
 | 4 | **TRAINER** | LoRA/QLoRA by default; parallel candidates where the plan is uncertain |
@@ -98,6 +98,20 @@ stage    : gate1  (no planning, no data, no GPU)
 - **Refusal is a return value, not an exception** — with a minimal witness and
   ordered remedies. Even a *free* build is refused below θ\* = (C+κ)/(V+κ),
   because the damage of shipping a bad model is not the compute you burned.
+- **Latency is prefill + decode, and for document work prefill dominates.** A
+  1000-token form producing 80 tokens of JSON puts ~67% of the time in prefill,
+  so costing decode alone understates the truth by ~3×. `expected_input_tokens`
+  is therefore a first-class Spec IR field, and a decode-only probe is not
+  allowed to promise a prefill-bound workload.
+- **Seven resource dimensions, six of them probed.** Storage and energy bind
+  independently of memory: a phone can hold an artefact it cannot load, and a
+  tablet doing 200 forms a day spends ~40% of its battery on inference
+  ([detail](docs/forge.md)).
+- **A question is asked only when its answer changes the build.** Every question
+  costs attrition — `P(complete) = e^(−γq)` — so FORGE asks iff
+  `IG·stake·Λ > γ`, and the information gain is *measured* by running the
+  Planner over each candidate answer rather than guessed from parser entropy. A
+  slot can be maximally ambiguous and still worth zero questions.
 
 ---
 
@@ -1072,18 +1086,26 @@ flowchart LR
 majestic-llm/
 ├── README.md · pyproject.toml · requirements.txt   (light core deps; heavy deps optional/lazy)
 ├── configs/        default · models · routing · devices
-├── docs/           architecture · USAGE · CONTRIBUTING · conformance · research-gaps
+├── docs/           architecture · forge · planner · device-verification · USAGE
+│   │               CONTRIBUTING · conformance · research-gaps
 │   └── diagrams/   animated SVGs used above
 ├── modelrig/                       ← the compiler
 │   ├── ir.py                       Spec / Build Plan / Artefact IR (hash-addressed)
 │   ├── gates.py                    Gate 1/2/3 — checked before any GPU
 │   ├── primitives.py · catalogue.py · licence.py   (the closed set, parts, legal)
-│   ├── forge.py · planner.py       front end + optimisation passes
+│   ├── forge/                      ← the front end
+│   │   ├── slots.py                the schema: elicited vs probed vs derived
+│   │   ├── parser.py               plain language → a partial Spec IR
+│   │   ├── posterior.py            parse_K: absence and ambiguity kept apart
+│   │   ├── infogain.py             the Planner as the information-gain oracle
+│   │   └── core.py                 the attrition rule; when to stop asking
+│   ├── planner/                    enumeration + the predicates (optimisation passes)
 │   ├── candidates.py               parallel builds → score both → pick one
 │   ├── data_factory.py · proving_ground.py   amplification + the seven axes
 │   ├── quantisation.py · grammar.py   calibration, flip rate, constrained decoding
 │   ├── cartridge.py · registry.py  content-addressed artefacts + lineage
 │   ├── feasibility.py              KV-cache-aware device predictor
+│   ├── resources.py                the seven resource dimensions, as pure functions
 │   ├── probe.py                    two-point calibration; the verification ladder
 │   ├── weights.py                  hash pinning, BF16 merge, merged-vs-separate
 │   ├── quantformat.py              SIMD flags select the quantisation format
