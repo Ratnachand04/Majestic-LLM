@@ -40,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     fo.add_argument("--offline", action="store_true", help="Answer the offline slot")
     fo.add_argument("--device", help="Answer the device slot")
     fo.add_argument("--seed-count", type=int, help="How many real examples exist")
+    fo.add_argument("--tier", default="commercial",
+                    choices=("experimental", "commercial", "regulated"),
+                    help="Customer tier: sets how many questions are worth asking")
+    fo.add_argument("--explain", action="store_true",
+                    help="Also show the questions the planner proved were pointless")
 
     c = sub.add_parser("compile", help="Compile a Spec IR into a certified cartridge")
     c.add_argument("--spec", required=True, help="Path to a Spec IR (.json/.yaml)")
@@ -202,37 +207,50 @@ def _cmd_primitives() -> int:
 
 
 def _cmd_forge(args: argparse.Namespace) -> int:
-    from modelrig.forge import Forge
+    from modelrig.forge import Interviewer, unasked_because_irrelevant, value_ratio
     from modelrig.ir import save_spec_ir
+    from modelrig.planner.objective import Tier
 
-    forge = Forge()
-    state = forge.parse(args.description)
-    answers = {}
+    answers: dict[str, object] = {}
     if args.offline:
         answers["offline_required"] = True
     if args.device:
         answers["device_target"] = args.device
     if args.seed_count is not None:
         answers["seed_data_count"] = args.seed_count
-    if answers:
-        state = forge.answer(state, **answers)
 
-    remaining = state.questions()
-    try:
-        spec = forge.to_spec(state)
-    except ValueError as exc:
-        print(f"cannot emit a spec yet: {exc}")
+    tier = Tier(args.tier)
+    iv = Interviewer(tier=tier).conduct(args.description, answers=answers)
+
+    if not iv.complete:
+        print(f"cannot emit a spec yet: {len(iv.pending)} slot(s) unfilled")
+        for q in iv.pending:
+            print(f"  - {q.text}")
         return 2
 
+    spec = iv.spec
     print(f"spec_hash : {spec.hash}")
     print(f"primitive : {spec.task_primitive.value}")
     print(f"device    : {spec.device_target}")
     print(f"offline   : {spec.offline_required}")
     print(f"seed data : {spec.seed_data_count}")
-    if remaining:
-        print("\nstill to ask (ranked by information gain):")
-        for q in remaining:
-            print(f"  - {q}")
+
+    if iv.pending:
+        # Ranked by measured information gain — how far each answer moves the
+        # plan — not by how uncertain the parser feels about it.
+        print(f"\nstill to ask ({tier.value} tier, lambda={value_ratio(tier):.2f}, "
+              f"P(complete)={iv.completion_probability:.0%}):")
+        for q in iv.pending:
+            flag = "must" if q.must_ask else f"{q.value:.2f} > {q.threshold}"
+            print(f"  [{flag:>12}] {q.text}")
+            print(f"                 {q.rationale}")
+
+    irrelevant = unasked_because_irrelevant(iv)
+    if irrelevant and args.explain:
+        print("\nnot asked — the planner proved the answer cannot move the plan:")
+        for slot, why in irrelevant:
+            print(f"  - {slot}: {why}")
+
     if args.out:
         save_spec_ir(spec, args.out)
         print(f"\nwrote {args.out}")
