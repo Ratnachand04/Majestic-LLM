@@ -30,6 +30,16 @@ the "one flexible model" framing has no answer and this one does.
 | 6 | REGISTRY | `modelrig/registry.py` | content-addressed cartridges, dedup, lineage |
 | 7 | FABRIC | `majestic/fabric/` | typed DAG runtime, statically verified |
 
+Weight compilation and device certification sit across subsystems 4-6 and are
+documented separately in [device-verification.md](device-verification.md):
+
+| Concern | Code | Role |
+|---|---|---|
+| Device probe | `modelrig/probe.py` | two-point calibration; the three-tier ladder |
+| Weight compilation | `modelrig/weights.py` | hash pinning, BF16 merge, merged-vs-separate |
+| Quantisation format | `modelrig/quantformat.py` | SIMD flags select the format, not just the bit width |
+| Compounding device model | `modelrig/devicedb.py` | accumulated probes replace the device lab |
+
 End to end: [`modelrig/pipeline.py`](../modelrig/pipeline.py).
 
 **LLMs occupy exactly five roles**; everything else is deterministic software.
