@@ -354,7 +354,8 @@ def test_unmeasured_device_refuses_a_latency_commitment():
     result = P_lat(spec, _cand(), CAT)
     assert result.ok is False
     assert "unmeasured" in result.reason
-    assert "device lab" in result.remedy
+    # Part 3 §9: the remedy is the probe, not buying twenty phones.
+    assert "probe" in result.remedy
 
 
 def test_estimates_are_allowed_only_when_explicitly_accepted():
