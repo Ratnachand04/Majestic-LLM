@@ -27,7 +27,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from majestic.logging_utils import get_logger
-from modelrig.ir import AbstentionPolicy, DataRights, SpecIR
+from modelrig.forge import slots as slot_table
+from modelrig.ir import AbstentionPolicy, DataRights, ProfileSource, SpecIR
 from modelrig.primitives import TaskPrimitive, spec_for
 
 logger = get_logger(__name__)
@@ -76,6 +77,10 @@ _ABSTAIN_HINTS = {
 }
 
 
+def _opt_int(value: Any) -> int | None:
+    return None if value is None else int(value)
+
+
 @dataclass
 class Slot:
     """One slot of the Spec IR schema, with the confidence FORGE has in it."""
@@ -103,7 +108,7 @@ class InterviewState:
         """Slots still to ask about, highest information gain first."""
         return sorted(
             (s for s in self.slots.values() if not s.filled),
-            key=lambda s: -s.information_gain,
+            key=lambda s: (-s.information_gain, s.name),
         )
 
     def questions(self, limit: int = 4) -> list[str]:
@@ -111,33 +116,33 @@ class InterviewState:
         return [s.question for s in self.unfilled()[:limit] if s.question]
 
 
-# Information gain per slot: how much the answer narrows the build space.
-_GAIN = {
-    "task_primitive": 1.0, "device_target": 0.9, "offline_required": 0.85,
-    "seed_data_ref": 0.8, "io_schema": 0.7, "quality_gate": 0.6,
-    "abstention_policy": 0.55, "data_rights": 0.5, "latency_budget_ms": 0.45,
-    "languages": 0.4, "policy_rules": 0.3, "budget_ceiling_usd": 0.2,
-}
+# The slot table (Part 4 §10) is the single source of truth for which fields are
+# elicited, what they are worth, and how they are phrased. The parser reads it
+# rather than keeping a second copy that can drift out of step: adding a slot
+# there makes it askable here with no change to this file.
+_ELICITED: tuple[str, ...] = tuple(
+    s.spec_field for s in slot_table.SLOTS
+    if s.spec_field and s.source is slot_table.Source.ELICITED
+)
 
-_QUESTIONS = {
-    "task_primitive": "What should the model DO with the input — extract fields, "
-                      "classify it, answer questions about it, or draft a reply?",
-    "device_target": "Which device will run this? (Scan the QR probe and we will "
-                     "detect RAM and chip automatically.)",
-    "offline_required": "Must it work with no internet ALWAYS, or only survive "
-                        "the network dropping occasionally?",
-    "seed_data_ref": "Can you upload real examples? We need them to build and, "
-                     "separately, to prove the result.",
-    "io_schema": "What fields or labels must come out, exactly?",
-    "quality_gate": "What accuracy would make this worth deploying?",
-    "abstention_policy": "When the model is unsure, should it flag for review or "
-                         "answer anyway?",
-    "data_rights": "Is the example data yours to train on?",
-    "latency_budget_ms": "How fast must a single result come back?",
-    "languages": "Which languages must it handle?",
-    "policy_rules": "Anything it must never say or do?",
-    "budget_ceiling_usd": "What is your budget ceiling for this build?",
-}
+#: Prior information gain per slot — a coarse ordering only. The *measured*
+#: number comes from :mod:`modelrig.forge.infogain`, which pushes candidate
+#: answers through the Planner and reads off how far the plan actually moves.
+_GAIN: dict[str, float] = {f: slot_table.BY_FIELD[f].ig_class.prior for f in _ELICITED}
+_QUESTIONS: dict[str, str] = {f: slot_table.BY_FIELD[f].question for f in _ELICITED}
+
+# Part 4 §17 — the input length is a first-order latency driver, so it is worth
+# parsing out of the description instead of asking for it. Values are tokens.
+_LENGTH_RULES: tuple[tuple[str, int], ...] = (
+    (r"\bfew\s+pages\b|\bmulti[- ]page\b|\bseveral\s+pages\b", 1_500),
+    (r"\bpages?\b|\bdocuments?\b|\bcontracts?\b|\breports?\b|\bforms?\b"
+     r"|\binvoices?\b|\breceipts?\b", 500),
+    (r"\bparagraphs?\b|\bemails?\b|\bmessages?\b|\btickets?\b|\breviews?\b", 120),
+    (r"\bone\s+line\b|\bsingle\s+line\b|\bshort\s+lines?\b|\bheadlines?\b", 20),
+)
+#: Tokens per word. Conservative for Latin script, low for Indic scripts, which
+#: is why an inferred value stays a prior and a tokenised sample beats it.
+_TOKENS_PER_WORD = 1.35
 
 
 class Forge:
@@ -202,6 +207,39 @@ class Forge:
         if m:
             put("seed_data_count", int(m.group(1)), 0.9)
 
+        # §17 — input length. Prefill is compute-bound and linear in this, so
+        # costing decode alone understates a document task by roughly 3x. Reading
+        # it out of the description turns an elicited slot into a derived one.
+        m = re.search(r"(\d+)\s*(?:input\s*)?tokens?\b", text)
+        if m:
+            put("expected_input_tokens", int(m.group(1)), 0.9)
+        elif (m := re.search(r"(\d+)\s*words?\b", text)) is not None:
+            put("expected_input_tokens", int(int(m.group(1)) * _TOKENS_PER_WORD), 0.8)
+        else:
+            for pattern, tokens in _LENGTH_RULES:
+                if re.search(pattern, text):
+                    # Deliberately below the fill threshold. Tokenising the
+                    # customer's actual documents is a derivation and settles the
+                    # slot; inferring 500 tokens from the word "forms" is a
+                    # guess about a first-order latency driver, so it seeds the
+                    # posterior and still gets asked.
+                    put("expected_input_tokens", tokens, 0.55)
+                    break
+
+        # throughput, for the energy dimension
+        m = re.search(r"(\d[\d,]*)\s*(?:of them\s*)?(?:per|a|each)\s*day|(\d[\d,]*)\s*daily",
+                      text)
+        if m:
+            put("expected_daily_volume", int((m.group(1) or m.group(2)).replace(",", "")), 0.85)
+
+        # data rights — gates the licence lattice, so a guess here is expensive
+        if re.search(r"\bour own\b|\bours to\b|\bwe own\b|\bour (?:customers'? )?data\b", text):
+            put("data_rights", DataRights.CUSTOMER_OWNED, 0.7)
+        elif re.search(r"\bpublic domain\b|\bopen data\b", text):
+            put("data_rights", DataRights.PUBLIC_DOMAIN, 0.8)
+        elif re.search(r"\bmay not (?:be )?train\b|\bno training\b|\bcannot train\b", text):
+            put("data_rights", DataRights.NO_TRAINING, 0.9)
+
         # abstention
         for policy, hints in _ABSTAIN_HINTS.items():
             if any(h in text for h in hints):
@@ -244,6 +282,15 @@ class Forge:
             )
         if isinstance(primitive, str):
             primitive = TaskPrimitive(primitive.lower())
+        # Answers arrive as strings from CLIs, JSON payloads and the scoring
+        # defaults of the slot table; coerce once, here, so nothing downstream
+        # has to guess whether it holds an enum or its value.
+        rights = values.get("data_rights", DataRights.UNKNOWN)
+        if isinstance(rights, str) and not isinstance(rights, DataRights):
+            rights = DataRights(rights.lower())
+        abstention = values.get("abstention_policy", AbstentionPolicy.FLAG)
+        if isinstance(abstention, str) and not isinstance(abstention, AbstentionPolicy):
+            abstention = AbstentionPolicy(abstention.lower())
 
         prim = spec_for(primitive)
         spec = SpecIR(
@@ -253,12 +300,17 @@ class Forge:
             device_target=values.get("device_target") or self.default_device,
             offline_required=bool(values.get("offline_required", False)),
             latency_budget_ms=values.get("latency_budget_ms"),
+            device_profile=values.get("device_profile"),
+            profile_source=values.get("profile_source", ProfileSource.ASSUMED),
+            expected_input_tokens=_opt_int(values.get("expected_input_tokens")),
+            expected_output_tokens=_opt_int(values.get("expected_output_tokens")),
+            expected_daily_volume=_opt_int(values.get("expected_daily_volume")),
             quality_gate=float(values.get("quality_gate", 0.9)),
             seed_data_ref=values.get("seed_data_ref"),
             seed_data_count=int(values.get("seed_data_count", 0)),
-            abstention_policy=values.get("abstention_policy", AbstentionPolicy.FLAG),
+            abstention_policy=abstention,
             policy_rules=values.get("policy_rules") or [],
-            data_rights=values.get("data_rights", DataRights.UNKNOWN),
+            data_rights=rights,
             budget_ceiling_usd=float(values.get("budget_ceiling_usd", 40.0)),
             jurisdiction=values.get("jurisdiction", "IN"),
             max_step_depth=int(values.get("max_step_depth", 1)),
