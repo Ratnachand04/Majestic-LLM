@@ -1,4 +1,14 @@
-# Device profiles for the Planner's memory and latency predicates.
+# Device PRIORS for the Planner's memory and latency predicates.
+#
+# Part 3 §14: these entries are **priors for un-probed devices**, not the source
+# of truth. A device probe supersedes every value here, and a probed profile is
+# what lets P_lat make a promise rather than only a refusal. The `unmeasured`
+# markers below stay honest, but they stop being a blocker — the resolution is
+# not buying twenty phones, it is making the customer's own device the
+# measurement instrument.
+#
+#   python -m cli.main probe --device <name> --small-mb 200 --large-mb 400 \
+#       --small-toks 42 --large-toks 22 --sustained-toks 11 --ram-free-mb 2600
 #
 # ram_gb                 total device RAM
 # usable_ram_fraction    share the OS makes available at all (1.0 = all of it)
