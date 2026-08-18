@@ -162,6 +162,53 @@ def test_plan_tier_changes_the_threshold(tmp_path: Path, capsys):
     assert experimental != regulated
 
 
+def test_probe_command_reproduces_the_worked_calibration(tmp_path: Path, capsys):
+    """200 MB at 42 tok/s and 400 MB at 22 tok/s give 9.24 GB/s and 2.16 ms."""
+    out_path = tmp_path / "profile.json"
+    code = main([
+        "probe", "--device-id", "sm-a536b-8f3a",
+        "--small-mb", "200", "--large-mb", "400",
+        "--small-toks", "42", "--large-toks", "22", "--sustained-toks", "13.2",
+        "--ram-free-mb", "2600", "--simd", "neon,dotprod,i8mm",
+        "--out", str(out_path),
+    ])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "9.24 GB/s" in out
+    assert "2.16 ms/token" in out
+    assert "thermal derate: 0.60" in out
+    assert "may promise" in out
+    assert out_path.exists()
+
+
+def test_probe_command_flags_far_extrapolation(capsys):
+    main([
+        "probe", "--device-id", "d", "--small-toks", "42", "--large-toks", "22",
+        "--ram-free-mb", "2600",
+    ])
+    assert "outside the probe bracket" in capsys.readouterr().out
+
+
+def test_probe_command_rejects_a_broken_benchmark(capsys):
+    """A larger model measuring faster is not a device that beats the roofline."""
+    code = main([
+        "probe", "--device-id", "d", "--small-toks", "20", "--large-toks", "30",
+        "--ram-free-mb", "2600",
+    ])
+    assert code == 2
+    assert "broken benchmark" in capsys.readouterr().out
+
+
+def test_probe_command_says_the_format_choice_is_a_hypothesis(capsys):
+    main([
+        "probe", "--device-id", "d", "--small-toks", "42", "--large-toks", "22",
+        "--ram-free-mb", "2600", "--simd", "neon,dotprod,i8mm",
+    ])
+    out = capsys.readouterr().out
+    assert "q4_0_4_8 (hypothesis)" in out
+    assert "NOT measured" in out
+
+
 def test_budget_command_prints_the_b09_table(capsys):
     assert main(["budget"]) == 0
     out = capsys.readouterr().out
