@@ -134,13 +134,25 @@ class Calibration:
     def tokens_per_s(self, size_bytes: int) -> float:
         return 1.0 / self.seconds_per_token(size_bytes)
 
+    @property
+    def bracket_recorded(self) -> bool:
+        return self.lo_bytes > 1 and self.hi_bytes > 1
+
     def extrapolation_factor(self, size_bytes: int) -> float:
         """How far outside the probed range a prediction reaches.
 
         1.0 means inside the bracket. §13: the affine model is good within
         roughly an order of magnitude, so predicting a 4 GB model from 200/400 MB
         probes is a 10x reach and unreliable.
+
+        Returns infinity when the bracket was never recorded. An unrecorded
+        bracket is an *unknown* range, not a zero-width one at the origin —
+        treating it as the latter produced reach figures in the billions. The
+        check cannot be performed, so the prediction cannot be trusted, and the
+        caller falls back to a bound.
         """
+        if not self.bracket_recorded:
+            return float("inf")
         if self.lo_bytes <= size_bytes <= self.hi_bytes:
             return 1.0
         if size_bytes > self.hi_bytes:
@@ -269,6 +281,17 @@ class DeviceProfile:
     #: §13: the probe runs on an idle device; production shares RAM with other
     #: apps. Free RAM at probe time overstates free RAM in use.
     headroom_factor: float = 0.85
+    #: --- Part 4 §13.4: prefill is COMPUTE-bound and needs its own measurement.
+    #: The two-point calibration above solves the bandwidth-bound decode term
+    #: only, so without these a "measured" latency is silently mixed-provenance:
+    #: decode from the probe, prefill from a prior. Vendor TOPS figures cannot
+    #: substitute — they describe NPU int8 peak and are unreachable from a CPU
+    #: runtime, typically by 10-50x.
+    flops_eff: float | None = None            # achieved FLOP/s, timed on device
+    prefill_ref_tok_s: float | None = None    # prefill rate at reference_params
+    reference_params: int | None = None       # the size both prefill terms assume
+    #: §13.6: measured package draw under inference, for the energy dimension.
+    power_draw_w: float | None = None
 
     @property
     def tier(self) -> Tier:
@@ -304,6 +327,32 @@ class DeviceProfile:
     def seconds_per_token(self, weight_bytes: int, sustained: bool = True) -> float:
         return 1.0 / self.tokens_per_s(weight_bytes, sustained)
 
+    @property
+    def prefill_measured(self) -> bool:
+        """Whether the compute-bound term was actually timed on this device."""
+        return self.flops_eff is not None or self.prefill_ref_tok_s is not None
+
+    def prefill_tokens_per_s(self, params: int, sustained: bool = True) -> float | None:
+        """Prefill rate for a model of ``params`` size, or ``None`` if unmeasured.
+
+        Prefill is compute-bound and costs ``2 P n_in`` FLOPs, so the achievable
+        token rate scales as ``1 / P``. Prefill also throttles HARDER than decode
+        — being compute- rather than bandwidth-bound — so document tasks suffer
+        the derate twice.
+        """
+        if self.flops_eff is not None:
+            rate = self.flops_eff / (2.0 * params)
+        elif self.prefill_ref_tok_s is not None and self.reference_params:
+            rate = self.prefill_ref_tok_s * (self.reference_params / params)
+        else:
+            return None
+        return rate * self.thermal_derate_180s if sustained else rate
+
+    def prefill_seconds(self, params: int, tokens_in: int,
+                        sustained: bool = True) -> float | None:
+        rate = self.prefill_tokens_per_s(params, sustained)
+        return None if rate is None else tokens_in / rate
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "device_id": self.device_id,
@@ -323,6 +372,11 @@ class DeviceProfile:
             "probe_lo_mb": self.probe_lo_mb,
             "probe_hi_mb": self.probe_hi_mb,
             "headroom_factor": self.headroom_factor,
+            "flops_eff": self.flops_eff,
+            "prefill_ref_tok_s": self.prefill_ref_tok_s,
+            "reference_params": self.reference_params,
+            "power_draw_w": self.power_draw_w,
+            "prefill_measured": self.prefill_measured,
         }
 
     @classmethod
@@ -391,6 +445,10 @@ def build_profile(
     source: ProfileSource = ProfileSource.PROBE,
     probe_version: str = "1",
     headroom_factor: float = 0.85,
+    prefill_tokens: int | None = None,
+    prefill_seconds: float | None = None,
+    prefill_params: int | None = None,
+    power_draw_w: float | None = None,
 ) -> DeviceProfile:
     """Turn raw probe measurements into a :class:`DeviceProfile`.
 
@@ -412,6 +470,15 @@ def build_profile(
             ).tokens_per_s
         derate = thermal_derate(reference, sustained_tokens_per_s)
 
+    # §13.4: time a prefill of known length to get F_eff. Without this the
+    # compute-bound half of every latency claim comes from a prior, and a
+    # "measured" verdict is really only half measured.
+    flops_eff = None
+    prefill_ref = None
+    if prefill_tokens and prefill_seconds and prefill_params:
+        flops_eff = 2.0 * prefill_params * prefill_tokens / prefill_seconds
+        prefill_ref = prefill_tokens / prefill_seconds
+
     profile = DeviceProfile(
         device_id=device_id,
         ram_total_mb=ram_total_mb,
@@ -430,12 +497,24 @@ def build_profile(
         probe_lo_mb=cal.lo_bytes // MB,
         probe_hi_mb=cal.hi_bytes // MB,
         headroom_factor=headroom_factor,
+        flops_eff=flops_eff,
+        prefill_ref_tok_s=prefill_ref,
+        reference_params=prefill_params,
+        power_draw_w=power_draw_w,
     )
     logger.info(
-        "probe %s: BW=%.2f GB/s, overhead=%.2f ms/tok, thermal=%.2f, free=%d MB",
+        "probe %s: BW=%.2f GB/s, overhead=%.2f ms/tok, thermal=%.2f, free=%d MB, "
+        "prefill=%s",
         device_id, profile.bw_eff_gbps, profile.overhead_ms_per_token,
         profile.thermal_derate_180s, profile.ram_free_mb,
+        "measured" if profile.prefill_measured else "NOT MEASURED",
     )
+    if not profile.prefill_measured:
+        logger.warning(
+            "probe %s: prefill was not timed, so any latency claim mixes a measured "
+            "decode term with an assumed compute term. For document tasks prefill is "
+            "the dominant term (Part 4 §13.3).", device_id,
+        )
     return profile
 
 
@@ -494,7 +573,7 @@ def emulation_for(profile: DeviceProfile, artefact: str, context: int = 2048) ->
 # =========================================================================== #
 @dataclass
 class LatencyVerdict:
-    """A latency claim, with the tier that licenses it."""
+    """A latency claim, with the tier that licenses it and both halves named."""
 
     tokens_per_s: float
     seconds_total: float
@@ -502,11 +581,26 @@ class LatencyVerdict:
     may_promise: bool
     reason: str = ""
     extrapolation_reach: float = 1.0
+    prefill_s: float = 0.0
+    decode_s: float = 0.0
+    prefill_measured: bool = False
+
+    @property
+    def prefill_share(self) -> float:
+        return self.prefill_s / self.seconds_total if self.seconds_total else 0.0
+
+    @property
+    def prefill_dominates(self) -> bool:
+        return self.prefill_share > 0.5
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "tokens_per_s": round(self.tokens_per_s, 3),
             "seconds_total": round(self.seconds_total, 3),
+            "prefill_s": round(self.prefill_s, 3),
+            "decode_s": round(self.decode_s, 3),
+            "prefill_share": round(self.prefill_share, 3),
+            "prefill_measured": self.prefill_measured,
             "tier": self.tier.name.lower(),
             "may_promise": self.may_promise,
             "extrapolation_reach": round(self.extrapolation_reach, 2),
@@ -526,28 +620,60 @@ def roofline_bound(weight_bytes: int, bw_eff_bytes_per_s: float) -> float:
 
 
 def assess_latency(
-    profile: DeviceProfile, weight_bytes: int, tokens_out: int, prefill_s: float = 0.0
+    profile: DeviceProfile, weight_bytes: int, tokens_out: int,
+    prefill_s: float = 0.0, *, params: int | None = None, tokens_in: int = 0,
 ) -> LatencyVerdict:
-    """Predict decode latency and state what tier the claim sits at."""
+    """Predict full latency — **prefill plus decode** — and state its tier.
+
+    When ``params`` and ``tokens_in`` are given and the probe timed a prefill,
+    the compute-bound term is computed from the measurement and the whole verdict
+    is genuinely measured. Otherwise ``prefill_s`` is taken as supplied (from a
+    prior) and the verdict is **downgraded**, because half a measurement does not
+    license a promise about a workload where that half dominates.
+    """
     reach = profile.calibration.extrapolation_factor(weight_bytes)
     rate = profile.tokens_per_s(weight_bytes, sustained=True)
-    total = prefill_s + tokens_out / rate
+    decode_s = tokens_out / rate
 
-    tier = profile.tier
+    prefill_measured = False
+    if params and tokens_in:
+        probed = profile.prefill_seconds(params, tokens_in, sustained=True)
+        if probed is not None:
+            prefill_s, prefill_measured = probed, True
+
+    total = prefill_s + decode_s
+    tier, may_promise, reason = profile.tier, profile.tier.may_promise, ""
+
     if tier is Tier.MEASURED and reach > 10.0:
-        # §13: the affine model is good within about a decade. Beyond that a
-        # measured profile no longer licenses a promise about THIS model.
-        return LatencyVerdict(
-            rate, total, Tier.ANALYTICAL, False, reach_reason(reach), reach,
+        # The affine model is good within about a decade. Beyond that a measured
+        # profile no longer licenses a promise about THIS model.
+        tier, may_promise, reason = Tier.ANALYTICAL, False, reach_reason(reach)
+    elif tier is Tier.MEASURED and prefill_s > 0 and not prefill_measured:
+        # Part 4 §13.3: prefill dominates document workloads. A decode-only
+        # measurement cannot promise a latency that prefill governs.
+        tier, may_promise = Tier.ANALYTICAL, False
+        reason = (
+            "decode was measured but prefill was not, and prefill is "
+            f"{prefill_s / total:.0%} of this workload — time a prefill of known "
+            "length to make this a promise"
         )
+    elif not may_promise:
+        reason = f"profile source is {profile.source.value}"
+
     return LatencyVerdict(
-        rate, total, tier, tier.may_promise,
-        "" if tier.may_promise else f"profile source is {profile.source.value}",
-        reach,
+        tokens_per_s=rate, seconds_total=total, tier=tier, may_promise=may_promise,
+        reason=reason, extrapolation_reach=reach, prefill_s=prefill_s,
+        decode_s=decode_s, prefill_measured=prefill_measured,
     )
 
 
 def reach_reason(reach: float) -> str:
+    if reach == float("inf"):
+        return (
+            "the probe did not record the model sizes it benchmarked, so how far "
+            "this prediction extrapolates cannot be checked; without that bracket "
+            "the affine decode model cannot be trusted and this reverts to a bound"
+        )
     return (
         f"target is {reach:.1f}x outside the probed size bracket; the affine decode "
         "model holds within roughly one decade, so this reverts to a bound"
