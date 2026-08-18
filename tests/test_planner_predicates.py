@@ -25,6 +25,7 @@ from modelrig.planner.licence_lattice import (
     resolve,
 )
 from modelrig.planner.predicates import (
+    ALL_PREDICATES,
     ETA,
     HARD,
     MU_MIN,
@@ -451,6 +452,17 @@ def test_the_derived_order_beats_the_naive_one():
 
 def test_hard_and_soft_partition_matches_the_spec():
     """§16: hard predicates are sound by construction and must be reported apart."""
-    assert set(HARD) == {"P_ram", "P_tok", "P_lic", "P_off"}
-    assert set(SOFT) == {"P_seed", "P_lat", "P_cost"}
+    assert set(HARD) == {"P_ram", "P_tok", "P_lic", "P_off", "P_storage"}
+    assert set(SOFT) == {"P_seed", "P_lat", "P_cost", "P_energy"}
     assert not set(HARD) & set(SOFT)
+
+
+def test_all_seven_resource_dimensions_have_a_predicate():
+    """Part 4 §12: memory, storage, latency, compute, thermal, energy, network.
+
+    Compute and thermal enter through P_lat rather than standing alone, and
+    network is settled structurally by P_off — offline sets recurring traffic to
+    zero by construction rather than by a check.
+    """
+    names = {p.name for p in ALL_PREDICATES}
+    assert {"P_ram", "P_storage", "P_lat", "P_energy", "P_off"} <= names
