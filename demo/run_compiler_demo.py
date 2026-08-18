@@ -33,7 +33,9 @@ from majestic.serving import (  # noqa: E402
     device_budget,
     swap_latency_ms,
 )
-from modelrig.forge import Forge  # noqa: E402
+from modelrig.forge import Interviewer, unasked_because_irrelevant  # noqa: E402
+from modelrig.probe import DeviceProfile  # noqa: E402
+from modelrig.probe import ProfileSource as ProbeSource  # noqa: E402
 from modelrig.ir import DataRights, SpecIR  # noqa: E402
 from modelrig.pipeline import MajesticCompiler  # noqa: E402
 from modelrig.primitives import TaskPrimitive  # noqa: E402
@@ -67,23 +69,51 @@ def main() -> int:
 
     # --- Acts 1-2: describe the need, four questions ------------------- #
     rule("ACT 1-2  FORGE — plain language to a typed specification")
-    forge = Forge()
-    state = forge.parse(REQUEST)
+    interviewer = Interviewer()
+    opening = interviewer.conduct(REQUEST)
     print(f"request   : {REQUEST}")
     print("\nslots FORGE filled by itself:")
-    for name, slot in state.slots.items():
+    for name, slot in opening.state.slots.items():
         if slot.filled:
             print(f"  {name:<20} = {slot.value}  (confidence {slot.confidence:.2f})")
-    print("\nquestions it still needs to ask (four, not forty):")
-    for q in state.questions():
-        print(f"  - {q}")
 
-    state = forge.answer(
-        state, data_rights=DataRights.CUSTOMER_OWNED, quality_gate=0.8,
-        seed_data_count=120, offline_required=True,
-    )
-    spec = forge.to_spec(state)
+    # The ranking is measured, not guessed: each candidate answer is pushed
+    # through the PLANNER and the gain is how far the resulting plan moves.
+    print("\nquestions it still needs to ask (four, not forty):")
+    for q in opening.pending[:4]:
+        print(f"  - {q.text}")
+        print(f"      why: {q.rationale}")
+
+    print("\nquestions it refuses to ask — the planner proved they cannot help:")
+    for slot, why in unasked_because_irrelevant(opening)[:3]:
+        print(f"  - {slot}: {why.split(' — ')[0]}")
+    print(f"\nP(customer completes this interview) = "
+          f"{opening.completion_probability:.0%}  (e^-gamma*q; every question costs)")
+
+    # The probe is not a question. One round trip collapses the whole device
+    # group from a posterior to a point mass — and it is what licenses a
+    # latency PROMISE rather than a refusal (Part 3 §9).
+    probe = DeviceProfile(
+        device_id="demo-midrange-a1b2", ram_total_mb=6000, ram_free_mb=4400,
+        bw_eff_gbps=9.24, overhead_ms_per_token=2.16, thermal_derate_180s=0.6,
+        prefill_ref_tok_s=50.0, reference_params=1_720_000_000,
+        storage_free_mb=24_000, power_draw_w=3.5, simd=("neon", "dotprod"),
+        # The sizes actually benchmarked. Recording them is what makes the
+        # extrapolation reach checkable after the fact — without the bracket the
+        # affine decode model cannot be trusted outside where it was fitted.
+        probe_lo_mb=400, probe_hi_mb=1_200, source=ProbeSource.PROBE,
+    ).to_dict()
+
+    interview = interviewer.conduct(REQUEST, device_profile=probe, answers={
+        "data_rights": DataRights.CUSTOMER_OWNED, "quality_gate": 0.8,
+        "seed_data_count": 120, "offline_required": True,
+        "seed_data_ref": "customer://tickets", "latency_budget_ms": 30_000,
+        "expected_input_tokens": 120, "io_schema": {"sentiment": "str"},
+    })
+    spec = interview.spec
     print(f"\nSpec IR hash: {spec.hash}  (identical hash -> served from cache)")
+    print(f"device facts: {spec.profile_source.value} — measured, so a latency "
+          f"budget may be promised rather than merely estimated")
 
     # --- Acts 3-8: compile ---------------------------------------------- #
     rule("ACT 3-8  COMPILE — gates, data, training, proving, certification")
