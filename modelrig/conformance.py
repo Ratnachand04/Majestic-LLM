@@ -300,6 +300,80 @@ def check_elicitation_conformance() -> ConformanceReport:
     return report
 
 
+# --------------------------------------------------------------------------- #
+def check_device_verification_conformance() -> ConformanceReport:
+    """Assert Part 3's rules about what a device claim may say.
+
+    These fail quietly. A ledger that answers "certified" for a device it never
+    saw still returns a cartridge, and a container the planner offers but no
+    accelerator can load still passes every other gate.
+    """
+    from modelrig.certification import (
+        MIN_EVAL_SUBSET,
+        MIN_OUTPUT_PARITY,
+        CertificationLedger,
+        VerificationSource,
+    )
+    from modelrig.planner.core import TARGETS
+    from modelrig.probe import Tier
+    from modelrig.quantformat import _TARGETS_BY_ACCELERATOR, target_formats_for
+
+    report = ConformanceReport()
+
+    # §7: only a measurement licenses a commitment. Every non-measured source
+    # must refuse to promise, at every tier.
+    for source in VerificationSource:
+        report.checks_run += 1
+        if source.may_promise != (source.tier is Tier.MEASURED):
+            report.add(check="only_measured_may_promise", subject=source.value,
+                       source="P3-07",
+                       detail=(f"{source.value} is tier {source.tier.name} but "
+                               f"may_promise={source.may_promise}; only a run on the "
+                               "actual silicon may commit to anything"))
+
+    # §11: absence must read as absence. A ledger holding one device must not
+    # answer for another, whatever else it holds.
+    report.checks_run += 1
+    empty = CertificationLedger()
+    if empty.certified_for("any-device") or "UNVERIFIED" not in empty.status_for("x"):
+        report.add(check="absence_is_reported", subject="CertificationLedger",
+                   source="P3-11",
+                   detail="an empty ledger must report every device as unverified")
+
+    # §11: the thresholds must actually constrain. A zero floor certifies runs
+    # that measured nothing.
+    report.checks_run += 1
+    if MIN_EVAL_SUBSET < 1 or not 0.0 < MIN_OUTPUT_PARITY <= 1.0:
+        report.add(check="certification_thresholds", subject="certification",
+                   source="P3-11",
+                   detail=(f"eval subset floor {MIN_EVAL_SUBSET} and parity floor "
+                           f"{MIN_OUTPUT_PARITY} must both bind"))
+
+    # §10: every container an accelerator can load must be a target the planner
+    # can actually build. Drift here means the planner offers a format nothing
+    # downstream produces, and nothing else reports it.
+    for accelerator, containers in _TARGETS_BY_ACCELERATOR.items():
+        for container in containers:
+            report.checks_run += 1
+            if container not in TARGETS:
+                report.add(check="container_is_buildable", subject=accelerator,
+                           source="P3-10",
+                           detail=(f"accelerator {accelerator!r} may load {container!r}, "
+                                   "which is not in the planner's target set"))
+
+    # §10: an offline build must remain plannable on every accelerator, or the
+    # offline requirement silently excludes hardware rather than a format.
+    for accelerator in _TARGETS_BY_ACCELERATOR:
+        report.checks_run += 1
+        if not target_formats_for(accelerator, offline=True):
+            report.add(check="offline_container_exists", subject=accelerator,
+                       source="P3-10",
+                       detail=(f"no offline-capable container on {accelerator!r}: an "
+                               "offline spec targeting it cannot be planned at all"))
+
+    return report
+
+
 def objective_threshold(tier, build_cost_micro: int = 40_000_000) -> float:
     from modelrig.planner.objective import refusal_threshold
 
@@ -311,9 +385,11 @@ def run_all(catalogue: Catalogue | None = None) -> ConformanceReport:
     compat = check_model_compatibility(catalogue)
     arch = check_architecture_conformance(catalogue)
     forge = check_elicitation_conformance()
+    device = check_device_verification_conformance()
     merged = ConformanceReport(
-        findings=compat.findings + arch.findings + forge.findings,
-        checks_run=compat.checks_run + arch.checks_run + forge.checks_run,
+        findings=compat.findings + arch.findings + forge.findings + device.findings,
+        checks_run=(compat.checks_run + arch.checks_run + forge.checks_run
+                    + device.checks_run),
     )
     logger.info(
         "conformance: %d checks, %d errors, %d warnings",
