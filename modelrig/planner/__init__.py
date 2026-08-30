@@ -23,6 +23,16 @@ Entry points
 ``select_base(...)``   §12's maximum over a chain
 ``Planner``            the stateful adapter the build pipeline uses
 """
+from modelrig.planner.audit import (
+    C2_PRECISION_TARGET,
+    MIN_SOFT_SHARE,
+    PrecisionEstimate,
+    RefusalAudit,
+    RefusalOutcome,
+    enumeration_economy,
+    plan_space_size,
+    summarise_witnesses,
+)
 from modelrig.planner.catalog import (
     Catalog,
     CatalogError,
@@ -78,6 +88,9 @@ from modelrig.planner.predicates import (
 from modelrig.planner.refusal import Refusal, Witness, WitnessSet, minimal_cover
 
 __all__ = [
+    # §16 — refusal quality, stratified so it cannot be inflated
+    "C2_PRECISION_TARGET", "MIN_SOFT_SHARE", "PrecisionEstimate", "RefusalAudit",
+    "RefusalOutcome", "enumeration_economy", "plan_space_size", "summarise_witnesses",
     # catalogue
     "Catalog", "CatalogError", "DeviceSpec", "ModelSpec", "QuantiserSpec",
     "default_catalog", "load_catalog",
