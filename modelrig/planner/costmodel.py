@@ -31,7 +31,13 @@ KAPPA_GPU_PER_GPU_SECOND = 500          # 0.0005 USD/s == $1.80/hr
 # SOURCE: open-weight teacher inference on the same rented hardware, measured as
 # generation throughput for a 32B model at bf16 with vLLM (~900 output tok/s).
 # Cost per generated token in micro-USD.
-KAPPA_GEN_PER_TOKEN = 1                  # ~$1.00 per million generated tokens
+# SOURCE: Part 8 §15 — self-hosted, batched vLLM on a rented A100 at ~$2/hour
+# with a 32B teacher at 4-bit producing ~1500 tok/s:
+#     $2 / (1500 * 3600 tokens) = ~$0.4 per million generated tokens.
+# The 90 micro-USD/1k figure quoted elsewhere is an API PRICE and is wrong for
+# self-hosted generation by roughly two orders of magnitude. Wall clock, not
+# dollars, is the binding constraint here.
+KAPPA_GEN_PER_TOKEN = 0.4                # ~$0.40 per million generated tokens
 
 # SOURCE: Proving Ground run cost — seven axes over a held-out set, dominated by
 # judge inference. Measured per evaluated example.
