@@ -328,6 +328,106 @@ def check_elicitation_conformance() -> ConformanceReport:
 
 
 # --------------------------------------------------------------------------- #
+def check_data_factory_conformance() -> ConformanceReport:
+    """Assert Part 8's rules about how training data is made.
+
+    The first check is the reframe: augmentation keeps a real label by
+    construction, so treating it like synthesis would price and risk it wrongly
+    and nothing else would notice.
+    """
+    from modelrig.augment import DOMINANT_OPERATION, MAX_DEPTH, Operation
+    from modelrig.diversity import ETA_0, effective_modes, seeds_required
+    from modelrig.primitives import TaskPrimitive
+
+    report = ConformanceReport()
+
+    # §1: label provenance decides risk, cost and whether a filter applies.
+    for operation, real, teacher in (
+        (Operation.AUGMENTATION, True, 0),
+        (Operation.SYNTHESIS, False, 300),
+    ):
+        report.checks_run += 1
+        if operation.label_is_real is not real or \
+                (operation.teacher_tokens_per_example == 0) is not (teacher == 0):
+            report.add(check="label_provenance", subject=operation.value,
+                       source="P8-01",
+                       detail=("augmentation keeps a REAL label and needs no teacher; "
+                               "synthesis generates both sides and does. Conflating "
+                               "them prices and risks the build wrongly"))
+
+    # §12: augmented data must never be quality-filtered — its labels are
+    # correct by construction, so a filter can only discard valid examples.
+    report.checks_run += 1
+    if Operation.AUGMENTATION.needs_quality_filter:
+        report.add(check="no_filter_on_augmented", subject="Operation", source="P8-12",
+                   detail="a quality filter over augmented data can only remove "
+                          "correctly labelled examples")
+
+    # §1: extraction is augmentation-dominated. If this ever flips, the cost
+    # model for the most common primitive silently becomes wrong.
+    report.checks_run += 1
+    if DOMINANT_OPERATION[TaskPrimitive.EXTRACT] is not Operation.AUGMENTATION:
+        report.add(check="extraction_is_augmentation", subject="extract",
+                   source="P8-01",
+                   detail=("customers usually already hold (document, label) pairs "
+                           "in their operational records; treating extraction as "
+                           "synthesis invents pairs that already exist"))
+
+    # §2: the composition depth cap must bind, or compositions drift off the
+    # manifold of realistic inputs while still type-checking as admissible.
+    report.checks_run += 1
+    if not 1 <= MAX_DEPTH <= 5:
+        report.add(check="composition_depth", subject="MAX_DEPTH", source="P8-02",
+                   detail=f"depth cap {MAX_DEPTH} does not bind realistically")
+
+    # §7: N_eff must count MODES, not rows. A measure that returns the row count
+    # reports maximum diversity for a set that has none.
+    report.checks_run += 1
+    collapsed = effective_modes(["same"] * 10_000)
+    if collapsed > 1.01:
+        report.add(check="n_eff_counts_modes", subject="effective_modes",
+                   source="P8-07",
+                   detail=(f"ten thousand identical rows measured as {collapsed:.1f} "
+                           "modes; the Hill number must return 1"))
+
+    # §8: one free constant, not two.
+    report.checks_run += 1
+    if not 0.0 < ETA_0 < 1.0:
+        report.add(check="single_discount_constant", subject="ETA_0", source="P8-08",
+                   detail=f"eta_0 = {ETA_0} must lie in (0, 1)")
+
+    # §20: amplification cannot rescue too few seeds, so the floor is a
+    # derivation. If kappa stops reducing the requirement, the ceiling is gone.
+    report.checks_run += 1
+    if seeds_required(200, kappa=1.0) >= 200:
+        report.add(check="amplification_ceiling", subject="seeds_required",
+                   source="P8-20",
+                   detail=("amplification must reduce the seed requirement, and "
+                           "must not eliminate it: n_eff_max = n_r (1 + kappa)"))
+
+    # §19: the Curse of Recursion belongs to the flywheel, where the feedback
+    # loop is real — not to single-build amplification, which is anchored.
+    report.checks_run += 1
+    import majestic.flywheel as flywheel
+    import modelrig.data_factory as data_factory
+
+    if "2305.17493" not in (flywheel.__doc__ or ""):
+        report.add(check="collapse_citation_placement", subject="flywheel",
+                   source="P8-19",
+                   detail=("the flywheel is where recursive training would occur, "
+                           "so I-03 is where the collapse citation belongs"))
+    report.checks_run += 1
+    if "not recursive" not in (data_factory.__doc__ or ""):
+        report.add(check="saturation_not_collapse", subject="data_factory",
+                   source="P8-19",
+                   detail=("single-build amplification is anchored on real seeds, so "
+                           "it saturates rather than collapsing. The reasoning "
+                           "matters: collapse means abort, saturation means stop"))
+
+    return report
+
+
+# --------------------------------------------------------------------------- #
 def check_proving_ground_conformance() -> ConformanceReport:
     """Assert Part 7's statistical rules.
 
@@ -714,13 +814,14 @@ def run_all(catalogue: Catalogue | None = None) -> ConformanceReport:
     registry = check_registry_conformance()
     fabric = check_fabric_conformance()
     proving = check_proving_ground_conformance()
+    factory = check_data_factory_conformance()
     merged = ConformanceReport(
         findings=(compat.findings + arch.findings + forge.findings + device.findings
                   + planner.findings + registry.findings + fabric.findings
-                  + proving.findings),
+                  + proving.findings + factory.findings),
         checks_run=(compat.checks_run + arch.checks_run + forge.checks_run
                     + device.checks_run + planner.checks_run + registry.checks_run
-                    + fabric.checks_run + proving.checks_run),
+                    + fabric.checks_run + proving.checks_run + factory.checks_run),
     )
     logger.info(
         "conformance: %d checks, %d errors, %d warnings",
