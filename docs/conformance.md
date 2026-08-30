@@ -21,7 +21,7 @@ device verdict, which is the number the product sells.
 | SmolLM2-360M | 32 | 5 | 64 | 0.36B | smollm | ✅ |
 | Llama-3.2-1B | 16 | 8 | 64 | 1.24B | llama | ✅ |
 
-**Result: 80 checks, 0 errors, 2 warnings.**
+**Result: 87 checks, 0 errors, 2 warnings.**
 
 The two warnings are real and worth keeping visible: there is no teacher in the
 `llama` or `smollm` tokenizer families, so bases from those families can only use
@@ -105,6 +105,11 @@ failure names the diagram it came from.
 | HARD and SOFT partition the predicates | P2-16 | `conformance` check |
 | Predicates sound by construction stay marked hard | P2-16 | `conformance` check |
 | Predicates are ordered by c/(1−ρ) | P2-04 | `conformance` check |
+| `seed_data_ref` is in the cache key | P5-08 | `conformance` check |
+| A cross-owner hit on private data is refused | P5-08 | `conformance` check |
+| The two hashes actually differ | P5-07 | `conformance` check |
+| No mitigation lets the real corpus shrink | P5-15 | `conformance` check |
+| Dedup approaches the size-ratio ceiling from below | P5-02 | `conformance` check |
 
 The κ row is the one worth watching. `θ*` and `Λ` are computed from the
 same `(V, κ)` pair by different formulas, and there is no structural reason they
