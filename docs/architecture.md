@@ -28,7 +28,7 @@ the "one flexible model" framing has no answer and this one does.
 | 4 | TRAINER | `modelrig/planes.py`, `modelrig/training_hf.py` | LoRA/QLoRA (heavy) or the offline classifier path |
 | 5 | PROVING GROUND | `modelrig/proving_ground.py` | seven axes, gate-enforced, repair loop |
 | 6 | REGISTRY | `modelrig/registry.py` | content-addressed cartridges, dedup, lineage, recall, and a cache that cannot leak between customers ([detail](registry.md)) |
-| 7 | FABRIC | `majestic/fabric/` | typed DAG runtime, statically verified |
+| 7 | FABRIC | `majestic/fabric/` | typed DAG runtime; offline closure by rewriting, channel capacity from the decoding grammar, Belady paging ([detail](fabric.md)) |
 
 Weight compilation and device certification sit across subsystems 4-6 and are
 documented separately in [device-verification.md](device-verification.md):
