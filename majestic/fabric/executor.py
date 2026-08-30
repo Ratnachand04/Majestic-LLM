@@ -100,6 +100,9 @@ class FabricRuntime:
             cost_ceiling_usd=self.cost_ceiling_usd,
         )
 
+    def _static_taint(self) -> dict[str, bool]:
+        return _static_taint_for(self.graph)
+
     def run(self, payload: Any = None) -> ExecutionResult:
         """Verify, then execute in topological order."""
         started = time.perf_counter()
@@ -123,6 +126,14 @@ class FabricRuntime:
         tainted: dict[str, bool] = {}
         last_output: Any = payload
 
+        # §18 — the runtime recomputes taint and asserts it matches the static
+        # proof. A cheap dynamic check whose only job is to catch drift between
+        # the analyser and the executor: two implementations of the same rule
+        # that are edited by different people at different times, and where a
+        # divergence would otherwise show up as a security failure in the field
+        # rather than as a test failure here.
+        predicted = self._static_taint()
+
         for name in order:
             node = self.graph.nodes[name]
             node_started = time.perf_counter()
@@ -135,6 +146,17 @@ class FabricRuntime:
                 incoming_taint = any(tainted.get(p, False) for p in preds)
             else:
                 node_input, incoming_taint = payload, False
+
+            if name in predicted and predicted[name] != incoming_taint:
+                # Never silently prefer one over the other. The static proof is
+                # what the graph was admitted on, so a mismatch means the
+                # admission was made on a different rule than the one running.
+                raise TaintViolation(
+                    f"taint drift at {name!r}: the static analysis proved "
+                    f"incoming taint {predicted[name]} and the runtime computed "
+                    f"{incoming_taint}. The analyser and the executor disagree "
+                    "about the same graph, so neither verdict can be trusted"
+                )
 
             # Offline closure, enforced rather than merely reported.
             if self.offline and node.requires_network:
@@ -202,6 +224,28 @@ class FabricRuntime:
             result.total_ms, "ok" if result.ok else "violations",
         )
         return result
+
+
+def _static_taint_for(graph: FabricGraph) -> dict[str, bool]:
+    """Recompute §7's dataflow in one topological pass, for the §18 check."""
+    from majestic.fabric.graph import TaintRole
+
+    incoming: dict[str, bool] = {}
+    outgoing: dict[str, bool] = {}
+    for name in graph.topological_order():
+        node = graph.nodes[name]
+        arriving = any(outgoing.get(p, False) for p in graph.predecessors(name))
+        incoming[name] = arriving
+        role = node.role
+        if role is TaintRole.CLEAR:
+            outgoing[name] = False
+        elif role is TaintRole.SOURCE:
+            outgoing[name] = True
+        elif role is TaintRole.NONE:
+            outgoing[name] = arriving
+        else:
+            outgoing[name] = arriving
+    return incoming
 
 
 def _ms_since(started: float) -> float:
