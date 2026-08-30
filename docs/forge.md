@@ -106,6 +106,36 @@ The second is a finding rather than a workaround: **while the device is
 unprobed, no answer the customer can give changes the outcome.** The probe is the
 highest-value next action and it is not a question.
 
+So FORGE emits a **probe token instead of a question** (`Interview.probe_request`).
+One round trip collapses the whole device group from a posterior to a point mass
+and costs zero questions, which is why the attrition budget should never be spent
+on a slot that can be measured.
+
+### Marginal, not ceteris paribus
+
+`information_gain` holds the other slots at a stand-in and varies only `σ_i`.
+`marginal_information_gain` — §3's estimator, and the default — draws full specs
+`s ~ ∏ᵢ pᵢ` from every slot posterior instead, so the number is the reduction in
+plan diversity attributable to learning `σ_i` *while everything else stays
+uncertain*.
+
+That distinction is not academic. Pinning makes the answer depend on where the
+pin was put: with a generous latency budget standing in, input length looks
+irrelevant because nothing binds. Marginalising removes the hand-picked constant
+from the measurement. It also discriminates better — the pinned estimator
+normalises by `log₂(n)` and ties slots at the ceiling, where the marginal one
+produces a real ordering:
+
+```
+slot                     pinned  marginal
+latency_budget_ms         0.579     0.486
+expected_input_tokens     0.579     0.375
+data_rights               0.579     0.375
+seed_data_count           0.579     0.278
+device_target             1.000     0.172
+budget_ceiling_usd        0.000     0.000     <- zero survives, which is the point
+```
+
 ---
 
 ## 3. Every question costs attrition
@@ -114,9 +144,10 @@ highest-value next action and it is not a question.
 P(complete | q questions) = e^(−γq)
 ```
 
-At `γ = 0.12` roughly 62% of customers finish a four-question interview and
-under 1% finish a forty-question one. "Just ask everything" is not the
-conservative choice — it is the choice that guarantees no spec at all.
+At `γ = 0.05`, 82% of customers finish a four-question interview, 61% finish
+ten, and 37% finish twenty. "Just ask everything" is not the conservative choice
+— it is the choice that guarantees no spec at all. Those three points *pin* γ, so
+the conformance check asserts the curve through them rather than a vague shape.
 
 ### The marginal rule
 
@@ -136,19 +167,57 @@ two parameters:
 | commercial | 1.67 | 0.48 | the default |
 | regulated | 11.0 | 0.92 | refuses most things, and asks a lot first |
 
+### Three reasons to ask, and they are different
+
+§8 unions three criteria, and dropping any one of them loses a real case:
+
+| reason | trigger | the case it catches |
+|---|---|---|
+| `REQUIRED` | `must_ask` and unfilled | `quality_gate` moves no plan but Gate 3 certifies against it |
+| `DECISION` | `IG · stake · Λ > γ` | the marginal rule |
+| `AMBIGUOUS` | `A_i > A_max` | the description reads two ways |
+
+The third is not a special case of the second. A slot can be maximally ambiguous
+and score zero gain, and it still has to be asked — the alternative is silently
+picking one reading of a sentence that supports two.
+
+**Two ambiguity signals, unioned.** `A_i` is measured by resampling and counting
+disagreement, which is how you detect ambiguity when nothing knows better. But
+the parser sometimes *does* know better: it recognises "must work when the
+internet dies" as supporting two readings outright. That is stronger evidence
+than a vote, not weaker, so `effective_ambiguity` floors a declared ambiguity at
+an even split. Without that floor the canonical case scores `A = 0` — every
+resample happened to agree — and would never be asked.
+
 **Raise κ and the system both refuses more and asks more.** Both are caution, and
 they move together rather than trading off — which is the property you want of a
 regulated-domain setting. `check_elicitation_conformance` asserts they never
 diverge.
 
-### Termination
+### Termination — four conditions, not one
 
-Not a question cap. The interview stops when no remaining slot clears the
-marginal rule, and the strongest case of that deserves a name: when every
-candidate answer to every remaining uncertainty yields the *same plan*, the
-remaining uncertainty is provably irrelevant and stopping is a proof rather than
-a heuristic (`Stop.PLAN_INVARIANT`). `MAX_QUESTIONS` is a policy backstop; if it
-ever fires, something upstream is miscalibrated.
+A spec that type-checks is not finished. `Interview.complete` requires all of:
+
+1. every `must_ask` slot filled,
+2. no remaining question clears the marginal rule,
+3. no unresolved ambiguity — `A_i ≤ A_max`,
+4. **Gate 1 passes**.
+
+The fourth is the one that changes behaviour. A well-formed spec carrying
+`data_rights = unknown` is inadmissible, and the old path emitted it silently —
+exactly the default the interview exists to prevent. §11 splits the two refusals
+by whose fault they are: a Gate 1 failure is remediable by the user, so FORGE
+owns explaining it, while Gate 2 is about physics and budget and belongs to the
+Planner.
+
+When conditions 3 or 4 fail at the cap, FORGE emits a **partial spec plus an
+explicit `unresolved_ambiguities` list**. It never guesses to complete.
+
+The strongest form of condition 2 deserves a name: when every candidate answer to
+every remaining uncertainty yields the *same plan*, what is left unknown is
+provably irrelevant and stopping is a proof rather than a heuristic
+(`Stop.PLAN_INVARIANT`). `MAX_QUESTIONS` is a policy backstop; if it ever fires,
+something upstream is miscalibrated.
 
 ---
 
@@ -283,11 +352,42 @@ the only part of the compiler a customer sees.
 
 ---
 
+## 7. Did the questions turn out to be worth asking?
+
+§6 closes the loop with a reward that is **observed, never judged**:
+
+```
+R = 1[gate passed first attempt] − γ·q − 1[customer rejected]
+```
+
+Elicitation research optimises against proxy rewards because nothing downstream
+can settle the question. Here the build settles it.
+
+The diagnostic matters more than the reward. `OutcomeLog.diagnose()` reports
+first-attempt pass rate **and** mean question count, and refuses to report one
+without the other:
+
+```
+FORGE OUTCOMES (§6)
+  first  10   pass 0.50   q_bar 4.0    reward +0.300
+  last   10   pass 0.70   q_bar 14.0   reward -0.000
+
+  ASKING_MORE: pass rate rose +20.0% but mean questions rose +10.0 and mean
+  reward did not improve — the attrition cost is being paid and not counted.
+  This is not learning
+```
+
+A pass rate that rose because the interview got longer is indistinguishable from
+real learning on any dashboard that plots pass rate alone. An abandoned interview
+scores `−γq` and nothing else: no gate was ever attempted, which is the outcome
+the whole budget exists to avoid.
+
 ## Open questions
 
 * **γ is a hypothesis.** No published elicitation study measures per-question
-  attrition, because their subjects are paid to finish. 0.12 reproduces the
-  observed shape; it is not a measurement.
+  attrition, because their subjects are paid to finish. 0.05 is the specified
+  value and the conformance check pins it to three stated points, but those
+  points are themselves an assumption, not a measurement.
 * **`DELTA_SHARE = 0.25`** — what a plan *change* is worth relative to a plan's
   *existence* — is a stake weight, not a measurement.
 * **`(V, κ)` per tier** remains the Planner's open question 2, and now governs
