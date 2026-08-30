@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from modelrig.certification import ArtefactKind, CertificationLedger
 from modelrig.ir import ArtefactIR, BuildPlanIR, SpecIR, content_hash
 
 
@@ -100,6 +101,11 @@ class Cartridge:
     eval_certificate: dict[str, Any] = field(default_factory=dict)
     licence_chain: dict[str, Any] = field(default_factory=dict)
     provenance: dict[str, Any] = field(default_factory=dict)
+    #: §11 — where this cartridge has actually been run. Per device AND per
+    #: artefact kind, because a merged model and a base-plus-adapter pair have
+    #: different numerics. A device absent from the ledger is reported as
+    #: unverified; it is never assumed to behave like one that is present.
+    measured_performance: CertificationLedger = field(default_factory=CertificationLedger)
     spec_hash: str = ""
     plan_hash: str = ""
     version: int = 1
@@ -126,9 +132,30 @@ class Cartridge:
 
     @property
     def certified(self) -> bool:
-        """A cartridge is admissible only with certification attached."""
+        """A cartridge is admissible only with certification attached.
+
+        This is certification of the *build*: it was evaluated, it is licensed,
+        and its provenance is recorded. It says nothing about any particular
+        piece of silicon — see :meth:`certified_for`.
+        """
         return bool(self.model_card and self.eval_certificate
                     and self.licence_chain.get("permitted", False))
+
+    def certified_for(self, device_id: str, kind: ArtefactKind | None = None) -> bool:
+        """Whether this cartridge has been proven to run on **this** device.
+
+        Deliberately separate from :attr:`certified`. A build can be
+        impeccably evaluated on a workstation and still answer differently
+        through another runtime on another SoC, so the two questions have two
+        answers and the manifest keeps them apart.
+        """
+        return self.certified and self.measured_performance.certified_for(device_id, kind)
+
+    def device_status(self, device_id: str, kind: ArtefactKind | None = None) -> str:
+        """A Build Card sentence about this device. Never optimistic."""
+        if not self.certified:
+            return "UNCERTIFIED: the build itself carries no evaluation or licence chain"
+        return self.measured_performance.status_for(device_id, kind)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -143,6 +170,7 @@ class Cartridge:
             "eval_certificate": dict(self.eval_certificate),
             "licence_chain": dict(self.licence_chain),
             "provenance": dict(self.provenance),
+            "measured_performance": self.measured_performance.to_list(),
             "spec_hash": self.spec_hash,
             "plan_hash": self.plan_hash,
             "version": self.version,
@@ -170,6 +198,9 @@ class Cartridge:
             eval_certificate=data.get("eval_certificate", {}),
             licence_chain=data.get("licence_chain", {}),
             provenance=data.get("provenance", {}),
+            measured_performance=CertificationLedger.from_list(
+                data.get("measured_performance")
+            ),
             spec_hash=data.get("spec_hash", ""),
             plan_hash=data.get("plan_hash", ""),
             version=int(data.get("version", 1)),
