@@ -230,6 +230,51 @@ accident.
 > The research question is whether the soft ones can be calibrated well enough to
 > be worth checking. **Two different claims; make both, separately.**
 
+### Measuring it without inflating it
+
+[`audit.py`](../modelrig/planner/audit.py) computes the report §16 mandates, and
+computes it in a shape that cannot be quoted wrongly by accident.
+
+```
+REFUSAL AUDIT (§16)
+
+  Claim 1 — the hard predicates are checked at all. Nobody does that.
+    P_tok, P_lic, P_ram, P_off, P_storage: sound by construction,
+    precision 1, unmeasurable. Fired on 40 of 50 refusals.
+
+  Claim 2 — can the soft predicates be calibrated well enough to be worth
+  checking? This is the research question, and the only measurable one.
+    p_soft = 0.600 [0.313, 0.832] over n=10 — does NOT clear the 0.60 bar
+    on the lower bound.
+
+  The aggregate would read 0.920 — +0.320 against the honest figure. It is
+  inflatable by corpus composition and must not be reported as the headline.
+
+  CORPUS WARNINGS — the numbers above are not yet usable:
+    - only 20% of refusals are soft-only, below the 50% floor
+    - only 10 soft-only refusals: too few to separate 0.60 from chance
+```
+
+Four properties are load-bearing:
+
+- **The aggregate is still computed** — so it can be shown to be inflated next to
+  the honest figure. Its key is `aggregate_do_not_report` and its label reads
+  `INFLATED`.
+- **A refusal any hard predicate carries is excluded** from the soft table
+  entirely, even when a soft predicate fired alongside. Its refusal was certain
+  regardless, so it says nothing about calibration.
+- **The corpus-composition guard** (§16 step 3) refuses to call a report usable
+  when soft-only refusals are under half, or when there are too few of them to
+  separate 0.60 from chance. This is the part that matters: it stops a
+  well-meaning run producing an impressive and worthless number.
+- **Intervals, not point estimates.** `clears()` tests the Wilson *lower bound*,
+  so 0.600 over n=10 does not clear a 0.600 bar.
+
+`plan_space_size()` likewise computes §2.2 against the live catalogue rather than
+asserting it — currently 9.6×10⁵, comfortably in the enumerable regime and about
+twelve orders of magnitude below NAS. A catalogue that grew enough to break that
+argument would otherwise pass every test in the suite.
+
 ## Module map
 
 | Module | Contents |
