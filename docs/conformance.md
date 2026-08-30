@@ -21,7 +21,7 @@ device verdict, which is the number the product sells.
 | SmolLM2-360M | 32 | 5 | 64 | 0.36B | smollm | ✅ |
 | Llama-3.2-1B | 16 | 8 | 64 | 1.24B | llama | ✅ |
 
-**Result: 48 checks, 0 errors, 2 warnings.**
+**Result: 69 checks, 0 errors, 2 warnings.**
 
 The two warnings are real and worth keeping visible: there is no teacher in the
 `llama` or `smollm` tokenizer families, so bases from those families can only use
@@ -96,8 +96,12 @@ failure names the diagram it came from.
 | The elicited set stays a minority of the schema | P4-09 | `conformance` check |
 | γ leaves 4 questions completing and 40 not | P4-04 | `conformance` check |
 | Raising κ raises **both** θ\* and Λ — more refusals *and* more questions | P4-04 | `conformance` check |
+| Only a measured source may promise | P3-07 | `conformance` check |
+| An unseen device is reported as unverified | P3-11 | `CertificationLedger` |
+| Every loadable container is one the planner can build | P3-10 | `conformance` check |
+| Every accelerator keeps an offline-capable container | P3-10 | `conformance` check |
 
-The last of those is the one worth watching. `θ*` and `Λ` are computed from the
+The κ row is the one worth watching. `θ*` and `Λ` are computed from the
 same `(V, κ)` pair by different formulas, and there is no structural reason they
 must move together — it is a property of the tier priors, so it is asserted
 rather than assumed. If they ever diverge, the regulated tier silently becomes
