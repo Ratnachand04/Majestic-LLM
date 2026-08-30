@@ -497,10 +497,44 @@ def plan(
     )
 
 
-def _wants_parallel(spec: SpecIR) -> bool:
-    """§15: parallel candidates are opt-in, never planner-initiated."""
+def candidate_mode(spec: SpecIR) -> Any:
+    """Which of the two things ``allow_parallel_candidates`` used to mean.
+
+    Part 9 §12 separates them, because one flag was governing two opposite
+    decisions:
+
+    * **hedge** — the same plan run twice hoping one passes. Part 2 §15's
+      negative result applies: strictly worse in expected cost at every pass
+      probability, so it stays opt-in and is never planner-initiated. What it
+      buys is wall-clock time and variance reduction, which is the customer's
+      trade to make.
+    * **sweep** — systematically varied candidates, where the Proving Ground
+      performs *model selection* rather than hedging. §15 does not apply:
+      redundancy buys a second draw from one distribution, search buys the
+      maximum over several, and ``E[max q_i] > E[q]`` strictly when they differ.
+
+    A sweep is also nearly free for small builds — five ranks at about ten cents
+    a run — so guessing the rank is a false economy.
+    """
+    from modelrig.trainer import CandidateMode
+
     io = spec.io_schema if isinstance(spec.io_schema, dict) else {}
-    return bool(io.get("allow_parallel_candidates", False))
+    declared = io.get("candidate_mode")
+    if declared:
+        return CandidateMode(str(declared).lower())
+    # The legacy flag meant "hedge", which is the conservative reading: it is
+    # the mode §15 argues against, so defaulting it to sweep would silently
+    # enable something the customer did not ask for.
+    if io.get("allow_parallel_candidates", False):
+        return CandidateMode.HEDGE
+    return CandidateMode.NONE
+
+
+def _wants_parallel(spec: SpecIR) -> bool:
+    """Whether to attach extra candidates at all, under either mode."""
+    from modelrig.trainer import CandidateMode
+
+    return candidate_mode(spec) is not CandidateMode.NONE
 
 
 def _diverse_alternatives(rest: Sequence[tuple], limit: int = 1) -> list[tuple]:
