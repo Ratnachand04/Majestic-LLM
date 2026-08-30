@@ -51,7 +51,7 @@ FORGE -> Spec IR -> [GATE 1] -> PLANNER -> Build Plan IR -> [GATE 2]
 | 2 | **PLANNER** | seven hard predicates over an enumerable plan space; returns a plan **or a refusal with a witness**. Deterministic — no LLM on the common path ([detail](docs/planner.md)) |
 | 3 | **DATA FACTORY** | seed-anchored amplification behind blocking QA gates; refuses below the real-seed floor |
 | 4 | **TRAINER** | LoRA/QLoRA by default; parallel candidates where the plan is uncertain |
-| 5 | **PROVING GROUND** | seven axes, all must pass; re-run in full after quantisation |
+| 5 | **PROVING GROUND** | seven axes all run, **four block**; the gate tests the confidence bound, not the point estimate ([detail](docs/proving-ground.md)) |
 | 6 | **REGISTRY** | content-addressed cartridges; base stored once, adapters are deltas; per-customer cache isolation and fleet recall ([detail](docs/registry.md)) |
 | 7 | **FABRIC** | typed DAG, statically verified for offline closure, RAM, latency and **channel capacity** — and it runs ([detail](docs/fabric.md)) |
 
@@ -79,6 +79,15 @@ stage    : gate1  (no planning, no data, no GPU)
   aggregate accuracy while changing a large share of individual answers. The
   quantiser is calibrated on the customer's own distribution and confidence is
   recalibrated afterwards.
+- **The gate is a hypothesis test, not a comparison.** `q̂ ≥ gate` ignores that
+  `q̂` has variance: at n=50 the interval spans fourteen points, so a single
+  error makes a 0.93 claim uncertifiable. Builds whose estimate clears the gate
+  but whose evidence does not yet carry it ship as **PROVISIONAL** with the
+  interval stated, and upgrade as field corrections narrow it.
+- **Seven axes run; four block.** Seven blocking gates at 80% power each ships
+  only 21% of *good* models — a broken gate, not a conservative one. Task
+  metric, safety, privacy and contamination halt a build; the rest are reported
+  prominently and do not. No axis is ever skipped.
 - **A compiled grammar, not a hopeful prompt.** Schema violation is impossible
   rather than unlikely.
 - **Untrusted content cannot reach a privileged tool** — proven statically in one
@@ -1143,6 +1152,7 @@ majestic-llm/
 │   ├── cartridge.py · registry.py  content-addressed artefacts + lineage + recall
 │   ├── cachekey.py                two hashes; the cache cannot leak between customers
 │   ├── economics.py · corpus.py   dedup/margin arithmetic; the append-only corpus
+│   ├── stats.py                    intervals, power, McNemar — every customer number
 │   ├── feasibility.py              KV-cache-aware device predictor
 │   ├── resources.py                the seven resource dimensions, as pure functions
 │   ├── probe.py                    two-point calibration; the verification ladder
