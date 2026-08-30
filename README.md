@@ -92,6 +92,12 @@ stage    : gate1  (no planning, no data, no GPU)
   customer's own hardware calibrate `t = S/BW_eff + c` exactly, which predicts
   latency for the whole catalogue on that device. All promises use the
   *sustained* rate, after the thermal derate.
+- **A cartridge is certified per device, and per artefact kind.** The same
+  cartridge may be certified for one SoC and unverified for another; a device
+  absent from the manifest is reported as unverified rather than assumed fine.
+  Throughput alone certifies nothing — a run that did not execute the eval subset
+  **on the device** is refused a certificate, because compilation and format
+  conversion can change the outputs while every aggregate number holds steady.
 - **Merging happens in BF16, never into the 4-bit training base.** There are two
   separate quantisations in the pipeline and conflating them loses most of the
   fine-tune while every step reports success.
@@ -1110,6 +1116,7 @@ majestic-llm/
 │   ├── weights.py                  hash pinning, BF16 merge, merged-vs-separate
 │   ├── quantformat.py              SIMD flags select the quantisation format
 │   ├── devicedb.py                 the compounding device model
+│   ├── certification.py            per-device certification; the on-device eval subset
 │   ├── conformance.py              model compatibility + architecture self-check
 │   ├── pipeline.py                 end to end, with the repair loop
 │   └── buildspec · compiler · planes · classifier · datasets · training_hf
