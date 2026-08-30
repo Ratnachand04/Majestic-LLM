@@ -1,0 +1,52 @@
+# Apex Diagnostics — the worked example carried across Parts 2, 3 and 4.
+#
+# The latency budget is the interesting field. It has been wrong twice, in the
+# same direction, for the same reason: latency was costed as decode alone.
+#
+#   C-02 and the storyline   1.6 s    asserted, never derived
+#   Part 2 §8                13.8 s   500 input tokens, prefill included
+#   Part 4 §13.3             ~29 s    1000 input tokens — an OCR'd requisition
+#
+# Prefill is compute-bound and scales with input length, and this workload runs
+# 1000 tokens in against 80 out — a ratio of 12.5, far above the 4-6 crossover
+# where prefill starts to dominate. So prefill is ~20 s of the ~29 s total, and
+# any budget set from decode alone understates the truth by roughly 3x.
+#
+# 45000 ms carries the measured ~29 s plus headroom for the thermal derate.
+# Extraction is not interactive; a 45 s per-form turnaround costs no quality and
+# is the remedy Part 2 §8 recommended ahead of dropping a base tier.
+task_primitive: extract
+device_target: android_tablet_4gb
+
+io_schema:
+  patient_id: string
+  test_code: string
+  collected_at: string
+  requesting_doctor: string
+
+languages: [en-IN, hi-IN]
+
+# §17: first-order latency drivers, and the fields whose absence caused the
+# error above. expected_input_tokens should be DERIVED where sample documents
+# exist — tokenise them and take the 95th percentile — rather than elicited.
+expected_input_tokens: 1000      # an OCR'd lab requisition
+expected_output_tokens: 80       # the JSON above
+expected_daily_volume: 200       # front-desk throughput, for the energy predicate
+
+latency_budget_ms: 45000
+offline_required: true
+quality_gate: 0.93
+
+seed_data_ref: customer://apex/requisitions
+seed_data_count: 150
+data_rights: customer_owned
+
+abstention_policy: flag
+policy_rules:
+  - never invent a patient identifier
+budget_ceiling_usd: 40.0
+jurisdiction: IN
+notes: >
+  Read lab requisition forms into the practice system on a front-desk Android
+  tablet. Must work with no internet at all. Flag anything uncertain rather
+  than guessing.
