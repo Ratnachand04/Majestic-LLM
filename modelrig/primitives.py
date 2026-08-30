@@ -39,8 +39,13 @@ class PrimitiveSpec:
     ----------
     seed_floor:
         Minimum number of REAL customer examples required before a build is
-        admissible. Below this the Data Factory refuses rather than amplifying
-        into model collapse (B-06, Curse of Recursion 2305.17493).
+        admissible. The floors differ per primitive because LABEL PROVENANCE
+        differs (Part 8 §1): augmentation-dominated primitives keep a real label
+        by construction, synthesis-dominated ones generate both sides. Below the
+        floor the Data Factory refuses, because amplification multiplies
+        effective data by at most (1 + kappa) and cannot extend the support of
+        the seed set (§20) — not because of recursive collapse, which needs a
+        feedback loop this pipeline does not have (§19).
     default_metric:
         Metric the Proving Ground uses when the spec does not name one.
     structured_output:
