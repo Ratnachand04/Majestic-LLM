@@ -328,6 +328,96 @@ def check_elicitation_conformance() -> ConformanceReport:
 
 
 # --------------------------------------------------------------------------- #
+def check_registry_conformance() -> ConformanceReport:
+    """Assert Part 5's storage and privacy rules.
+
+    The first check is the important one. §8 is a data-protection constraint
+    that a plausible optimisation would remove — hashing the requirements and
+    not the data looks like a free improvement to the hit rate, and would serve
+    one customer a model trained on another customer's documents. Nothing else
+    in the system would report it.
+    """
+    from modelrig.cachekey import (
+        CACHE_EXCLUDED,
+        CACHE_REQUIRED,
+        h_cache,
+        lookup_allowed,
+    )
+    from modelrig.corpus import FORBIDDEN_MITIGATIONS, PERMITTED_MITIGATIONS
+    from modelrig.economics import break_even_k, dedup_ceiling, dedup_ratio
+    from modelrig.ir import SpecIR
+    from modelrig.licence import DataRights
+    from modelrig.primitives import TaskPrimitive
+
+    report = ConformanceReport()
+
+    # §8 barrier 1: the seed reference is in the cache key. Always.
+    report.checks_run += 1
+    if "seed_data_ref" not in CACHE_REQUIRED or "seed_data_ref" in CACHE_EXCLUDED:
+        report.add(check="seed_ref_in_cache_key", subject="h_cache", source="P5-08",
+                   detail=("data.seed_ref must be in the cache key: without it two "
+                           "customers with identical requirements and different "
+                           "confidential corpora collide, and the second is served a "
+                           "model trained on the first customer's documents"))
+
+    # ...and demonstrated, not merely declared.
+    report.checks_run += 1
+
+    def _spec(seed: str) -> SpecIR:
+        return SpecIR(task_primitive=TaskPrimitive.EXTRACT, seed_data_ref=seed,
+                      data_rights=DataRights.CUSTOMER_OWNED)
+
+    if h_cache(_spec("s3://a/forms")) == h_cache(_spec("s3://b/forms")):
+        report.add(check="different_data_different_key", subject="h_cache",
+                   source="P5-08",
+                   detail="two corpora hashed to one cache key: builds would collide")
+
+    # §8 barrier 2: the owner check refuses a cross-owner hit on private data.
+    report.checks_run += 1
+    if lookup_allowed(requester="beta", owner="acme", hit_is_public=False):
+        report.add(check="owner_check", subject="lookup_allowed", source="P5-08",
+                   detail=("a cross-owner cache hit on private data must be refused; "
+                           "this is the second of two deliberately redundant barriers"))
+
+    # §7: the two hashes must actually differ, or the cache never hits.
+    report.checks_run += 1
+    if not CACHE_EXCLUDED:
+        report.add(check="two_hashes", subject="CACHE_EXCLUDED", source="P5-07",
+                   detail=("h_cache excludes nothing, so it equals h_ident and the "
+                           "hit rate collapses to zero"))
+
+    # §15: no mitigation may appear in both lists, and the forbidden ones must
+    # stay forbidden — each of them lets the corpus shrink, which voids I-03.
+    report.checks_run += 1
+    overlap = set(PERMITTED_MITIGATIONS) & set(FORBIDDEN_MITIGATIONS)
+    if overlap:
+        report.add(check="corpus_mitigations", subject=", ".join(sorted(overlap)),
+                   source="P5-15",
+                   detail=("a mitigation cannot be both permitted and forbidden; "
+                           "anything that lets the real corpus shrink voids the "
+                           "collapse guarantee"))
+
+    # §2: the dedup ceiling is the size ratio, and D must approach it from below.
+    report.checks_run += 1
+    ceiling = dedup_ceiling()
+    if dedup_ratio(1e6) > ceiling or dedup_ratio(1e6) < 0.99 * ceiling:
+        report.add(check="dedup_ceiling", subject="dedup_ratio", source="P5-02",
+                   detail=(f"D must approach {ceiling:.1f} from below as k grows; "
+                           f"got {dedup_ratio(1e6):.2f}"))
+
+    # §3: break-even sits just above 1, so CAS is worse for the first cartridge.
+    # If this ever drifts far from 1 the storage model has changed underneath.
+    report.checks_run += 1
+    if not 1.0 < break_even_k() < 1.5:
+        report.add(check="dedup_break_even", subject="break_even_k", source="P5-03",
+                   detail=(f"break-even k = {break_even_k():.2f}; it should sit just "
+                           "above 1, and CAS should cost slightly more for the first "
+                           "cartridge on a base"))
+
+    return report
+
+
+# --------------------------------------------------------------------------- #
 def check_planner_conformance() -> ConformanceReport:
     """Assert Part 2's structural claims still hold over the live catalogue.
 
@@ -472,11 +562,12 @@ def run_all(catalogue: Catalogue | None = None) -> ConformanceReport:
     forge = check_elicitation_conformance()
     device = check_device_verification_conformance()
     planner = check_planner_conformance()
+    registry = check_registry_conformance()
     merged = ConformanceReport(
         findings=(compat.findings + arch.findings + forge.findings + device.findings
-                  + planner.findings),
+                  + planner.findings + registry.findings),
         checks_run=(compat.checks_run + arch.checks_run + forge.checks_run
-                    + device.checks_run + planner.checks_run),
+                    + device.checks_run + planner.checks_run + registry.checks_run),
     )
     logger.info(
         "conformance: %d checks, %d errors, %d warnings",
