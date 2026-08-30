@@ -20,6 +20,7 @@ from typing import Any, Iterable, Optional, Sequence
 
 from majestic.logging_utils import get_logger
 from modelrig.ir import BuildPlanIR, SpecIR
+from modelrig import quantformat
 from modelrig.planner import objective, predicates
 from modelrig.catalogue import ladder_tier
 from modelrig.planner.catalog import Catalog, ModelSpec, default_catalog
@@ -204,12 +205,38 @@ def _grid(spec: SpecIR, base: ModelSpec, catalog: Catalog) -> Iterable[tuple]:
     if spec.offline_required:
         targets = tuple(t for t in targets if t != "vllm") or ("gguf",)
 
+    # Part 3 §10: the accelerator decides which container can be LOADED, and the
+    # lines above infer it from the device's NAME — the guess the probe exists to
+    # replace. Two units in the same class can differ in whether an NPU delegate
+    # is usable at all, so a measured accelerator overrides the prefix.
+    probed = _probed_accelerator(spec)
+    if probed is not None:
+        loadable = quantformat.target_formats_for(
+            probed, offline=spec.offline_required, allowed=TARGETS
+        )
+        # Keep the class ordering where the two agree; fall back to what the
+        # accelerator can actually load when they do not.
+        targets = tuple(t for t in targets if t in loadable) or tuple(loadable)
+
     ranks = (16, 32) if base.params_b < 4.0 else (32, 64)
     for method in methods:
         for quant in quants:
             for rank in ranks:
                 for target in targets:
                     yield method, rank, quant, target
+
+
+def _probed_accelerator(spec: SpecIR) -> str | None:
+    """The accelerator a probe actually measured, or ``None`` when unprobed.
+
+    An assumed profile does not count: the whole point of §10 is that this
+    coordinate stops being inferred from the device tier once someone measures it.
+    """
+    profile = spec.device_profile
+    if not isinstance(profile, dict) or not spec.profile_source.measured:
+        return None
+    accelerator = profile.get("accelerator")
+    return str(accelerator) if accelerator else None
 
 
 def _data_recipe(spec: SpecIR, base: ModelSpec) -> dict[str, Any]:
