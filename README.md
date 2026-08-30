@@ -49,7 +49,7 @@ FORGE -> Spec IR -> [GATE 1] -> PLANNER -> Build Plan IR -> [GATE 2]
 |---|---|---|
 | 1 | **FORGE** | slot-filling interview that asks four questions, not forty — and picks them by pushing candidate answers through the **Planner** and keeping the ones that move the plan ([detail](docs/forge.md)) |
 | 2 | **PLANNER** | seven hard predicates over an enumerable plan space; returns a plan **or a refusal with a witness**. Deterministic — no LLM on the common path ([detail](docs/planner.md)) |
-| 3 | **DATA FACTORY** | seed-anchored amplification behind blocking QA gates; refuses below the real-seed floor |
+| 3 | **DATA FACTORY** | augmentation before synthesis — for extraction the labels already exist; generation stops at saturation ([detail](docs/data-factory.md)) |
 | 4 | **TRAINER** | LoRA/QLoRA by default; parallel candidates where the plan is uncertain |
 | 5 | **PROVING GROUND** | seven axes all run, **four block**; the gate tests the confidence bound, not the point estimate ([detail](docs/proving-ground.md)) |
 | 6 | **REGISTRY** | content-addressed cartridges; base stored once, adapters are deltas; per-customer cache isolation and fleet recall ([detail](docs/registry.md)) |
@@ -90,6 +90,16 @@ stage    : gate1  (no planning, no data, no GPU)
   prominently and do not. No axis is ever skipped.
 - **A compiled grammar, not a hopeful prompt.** Schema violation is impossible
   rather than unlikely.
+- **Augmentation before synthesis.** For extraction the customer usually already
+  holds (document, label) pairs in their operational records — so the job is
+  realistic variations of real inputs whose labels are known unchanged, which
+  costs no teacher inference and carries a real label by construction.
+- **Amplification is capped at (1+κ).** Fifty seeds cannot become five thousand
+  examples' worth of information, so a refusal says *"you need about ninety real
+  examples — more seeds, not more generation"* rather than naming a threshold.
+- **Generation stops when diversity saturates**, not at a guessed target — and
+  the resulting count is a reported measurement. Wall clock, not dollars, is the
+  binding constraint here.
 - **Untrusted content cannot reach a privileged tool** — proven statically in one
   linear pass, then enforced again at runtime, with the two verdicts asserted
   against each other so analyser/executor drift is fatal rather than silent.
@@ -1147,7 +1157,9 @@ majestic-llm/
 │   ├── planner/                    enumeration + the predicates (optimisation passes)
 │   │   └── audit.py                refusal precision, stratified so it cannot inflate
 │   ├── candidates.py               parallel builds → score both → pick one
-│   ├── data_factory.py · proving_ground.py   amplification + the seven axes
+│   ├── data_factory.py · augment.py · diversity.py   augmentation, saturation,
+│   │                              the amplification ceiling
+│   ├── proving_ground.py          the seven axes; four of them block
 │   ├── quantisation.py · grammar.py   calibration, flip rate, constrained decoding
 │   ├── cartridge.py · registry.py  content-addressed artefacts + lineage + recall
 │   ├── cachekey.py                two hashes; the cache cannot leak between customers
