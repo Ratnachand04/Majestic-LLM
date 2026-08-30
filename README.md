@@ -104,6 +104,12 @@ stage    : gate1  (no planning, no data, no GPU)
 - **Refusal is a return value, not an exception** — with a minimal witness and
   ordered remedies. Even a *free* build is refused below θ\* = (C+κ)/(V+κ),
   because the damage of shipping a bad model is not the compute you burned.
+- **Refusal quality is reported stratified, never aggregated.** `P_ram`, `P_tok`,
+  `P_lic` and `P_off` are sound *by construction* — their precision is 1 and no
+  experiment can inform it — so an aggregate precision number is inflatable by
+  padding the corpus with memory-infeasible specs. The audit reports `p_soft`
+  per predicate with Wilson intervals, and refuses to call a corpus usable when
+  hard refusals dominate it.
 - **Latency is prefill + decode, and for document work prefill dominates.** A
   1000-token form producing 80 tokens of JSON puts ~67% of the time in prefill,
   so costing decode alone understates the truth by ~3×. `expected_input_tokens`
@@ -1106,6 +1112,7 @@ majestic-llm/
 │   │   ├── infogain.py             the Planner as the information-gain oracle
 │   │   └── core.py                 the attrition rule; when to stop asking
 │   ├── planner/                    enumeration + the predicates (optimisation passes)
+│   │   └── audit.py                refusal precision, stratified so it cannot inflate
 │   ├── candidates.py               parallel builds → score both → pick one
 │   ├── data_factory.py · proving_ground.py   amplification + the seven axes
 │   ├── quantisation.py · grammar.py   calibration, flip rate, constrained decoding
