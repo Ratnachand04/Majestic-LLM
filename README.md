@@ -124,6 +124,15 @@ stage    : gate1  (no planning, no data, no GPU)
   `IG·stake·Λ > γ`, and the information gain is *measured* by running the
   Planner over each candidate answer rather than guessed from parser entropy. A
   slot can be maximally ambiguous and still worth zero questions.
+- **…but ambiguity is its own reason to ask.** Three criteria union into the ask
+  set — required, decision-relevant, and *contested* — because a description that
+  reads two ways has to be resolved whatever the plan says. The alternative is
+  silently picking one meaning.
+- **A spec that type-checks is not finished.** Completion needs all four §5
+  conditions, Gate 1 included: a well-formed spec carrying `data_rights=unknown`
+  is inadmissible, and emitting it is exactly the silent default the interview
+  exists to prevent. Gate 1 refusals are FORGE's to explain; Gate 2's are the
+  Planner's.
 
 ---
 
@@ -1097,7 +1106,7 @@ flowchart LR
 ```
 majestic-llm/
 ├── README.md · pyproject.toml · requirements.txt   (light core deps; heavy deps optional/lazy)
-├── configs/        default · models · routing · devices
+├── configs/        default · models · routing · devices · specs/
 ├── docs/           architecture · forge · planner · device-verification · USAGE
 │   │               CONTRIBUTING · conformance · research-gaps
 │   └── diagrams/   animated SVGs used above
@@ -1110,7 +1119,8 @@ majestic-llm/
 │   │   ├── parser.py               plain language → a partial Spec IR
 │   │   ├── posterior.py            parse_K: absence and ambiguity kept apart
 │   │   ├── infogain.py             the Planner as the information-gain oracle
-│   │   └── core.py                 the attrition rule; when to stop asking
+│   │   ├── core.py                 the attrition rule; when to stop asking
+│   │   └── outcomes.py             did the questions turn out to be worth asking?
 │   ├── planner/                    enumeration + the predicates (optimisation passes)
 │   │   └── audit.py                refusal precision, stratified so it cannot inflate
 │   ├── candidates.py               parallel builds → score both → pick one
