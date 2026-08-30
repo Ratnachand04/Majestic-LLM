@@ -26,7 +26,7 @@ the "one flexible model" framing has no answer and this one does.
 | 2 | PLANNER | `modelrig/planner/` | enumeration + seven predicates → Build Plan IR **or a refusal** ([detail](planner.md)) |
 | 3 | DATA FACTORY | `modelrig/data_factory.py` | seed-anchored amplification with collapse guardrails |
 | 4 | TRAINER | `modelrig/planes.py`, `modelrig/training_hf.py` | LoRA/QLoRA (heavy) or the offline classifier path |
-| 5 | PROVING GROUND | `modelrig/proving_ground.py` | seven axes, gate-enforced, repair loop |
+| 5 | PROVING GROUND | `modelrig/proving_ground.py`, `modelrig/stats.py` | seven axes run, **four block**; the gate is a hypothesis test on the lower bound ([detail](proving-ground.md)) |
 | 6 | REGISTRY | `modelrig/registry.py` | content-addressed cartridges, dedup, lineage, recall, and a cache that cannot leak between customers ([detail](registry.md)) |
 | 7 | FABRIC | `majestic/fabric/` | typed DAG runtime; offline closure by rewriting, channel capacity from the decoding grammar, Belady paging ([detail](fabric.md)) |
 
