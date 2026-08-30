@@ -25,8 +25,8 @@ dependency order:
 | Foundations | `modelrig/primitives.py` (the eight), `licence.py` (GAP-08), `catalogue.py` |
 | The contract | `modelrig/ir.py` — Spec / Build Plan / Artefact IR, hash-addressed (GAP-01) |
 | Verification | `modelrig/gates.py` — Gates 1/2/3, checked before any GPU |
-| Front end | `modelrig/forge.py` — slot-filling interview |
-| Passes | `modelrig/planner.py` — precedent warm start, validator, mutation |
+| Front end | `modelrig/forge/` — slot-filling interview, scored by the planner |
+| Passes | `modelrig/planner/` — precedent warm start, validator, mutation |
 | Build | `modelrig/data_factory.py`, `proving_ground.py` |
 | Output | `modelrig/cartridge.py`, `registry.py` (content-addressed, lineage) |
 | Runtime | `majestic/fabric/` (typed DAG + static analyser), `majestic/router/deferral.py`, `majestic/flywheel.py` |
