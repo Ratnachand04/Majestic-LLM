@@ -17,10 +17,28 @@ Proving Ground. Everything the customer is later shown is measured on it.
 corpus and mixes it in. This is what makes the flywheel safe
 (accumulate-don't-replace, 2404.01413).
 
-The bounding constraint is the Curse of Recursion (2305.17493): training on
-generated data causes irreversible tail loss. Below a minimum real-seed floor the
-factory REFUSES the build rather than shipping a model that will quietly
-degrade.
+The bounding constraint is **saturation**, not collapse — and Part 8 §19 is a
+correction to how this was justified everywhere else in the series.
+
+The Curse of Recursion (2305.17493) describes *recursive* training: generation
+k+1 trains on generation k's outputs, iterated, with distribution tails
+progressively lost. Amplification here is not recursive. Every generation call is
+anchored on the customer's real seeds and no generated example is ever fed back
+as a source, so the mechanism that produces collapse is structurally absent.
+
+What happens instead is that a bounded generatable space fills up. More data
+becomes *useless* rather than *harmful*, and the correct response is to stop
+generating rather than to abort the build. The guardrails do not change; the
+reasoning behind them does, and that matters because the reasoning determines
+what happens when a guardrail fires.
+
+The citation belongs to the flywheel (I-03), where training generation g+1 on
+generation g's outputs would be exactly the recursive structure — which is why
+retraining uses human corrections, and why that invariant keeps the reference.
+
+Below a minimum real-seed floor the factory still REFUSES, for the reason Part 8
+§20 derives: amplification multiplies effective data by at most (1 + kappa), so
+too few seeds cannot be rescued by generating more.
 
 GAP-05 (open): nobody has characterised what happens to a narrow task cartridge
 retrained across twenty generations on accumulating human corrections. The
@@ -335,7 +353,9 @@ class DataFactory:
                 f"only {len(real)} real examples for primitive "
                 f"{prim.primitive.value!r}; the floor is {prim.seed_floor}. "
                 "Refusing to amplify: training on generated data below the floor "
-                "causes irreversible tail loss (2305.17493)."
+                "cannot extend the support of the seed set: amplification "
+                "multiplies effective data by at most (1 + kappa), so more "
+                "generation will not substitute for more seeds (Part 8 §20)."
             )
 
         seeds, held_out = self.split(real)
