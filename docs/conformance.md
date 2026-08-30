@@ -21,7 +21,7 @@ device verdict, which is the number the product sells.
 | SmolLM2-360M | 32 | 5 | 64 | 0.36B | smollm | ✅ |
 | Llama-3.2-1B | 16 | 8 | 64 | 1.24B | llama | ✅ |
 
-**Result: 92 checks, 0 errors, 2 warnings.**
+**Result: 100 checks, 0 errors, 2 warnings.**
 
 The two warnings are real and worth keeping visible: there is no teacher in the
 `llama` or `smollm` tokenizer families, so bases from those families can only use
@@ -88,7 +88,7 @@ failure names the diagram it came from.
 | Untrusted content cannot reach a privileged tool | A-09, B-10 | analyser + runtime + ReAct loop |
 | Every gate checked before any GPU | B-03 | `gates`, `pipeline` |
 | Seed floor or refuse | B-06 | `data_factory` |
-| Seven axes, all must pass | B-07 | `proving_ground` |
+| Seven axes run, **four block** (superseded B-07's "all must pass") | P7-09 | `proving_ground` |
 | Repairer acts only on external evidence | B-07 | `Repairer.repair` |
 | Base stored once; lineage is a query | B-08 | `registry.CartridgeRegistry` |
 | Parallel candidates, score both, pick one | B-01, C-02 | `candidates` |
@@ -115,6 +115,12 @@ failure names the diagram it came from.
 | `c_max = 0` reproduces binary taint exactly | P6-11 | `conformance` check |
 | A confirm node clears taint | P6-10 | `conformance` check |
 | Belady never loses to LRU | P6-15 | `conformance` check |
+| The gate tests the lower bound, not the estimate | P7-05 | `conformance` check |
+| One error in fifty breaks a 0.93 claim | P7-03 | `conformance` check |
+| The interval does not collapse at a clean sweep | P7-03 | `conformance` check |
+| Exactly four axes block | P7-09 | `conformance` check |
+| The blocking set is chosen by consequence | P7-09 | `conformance` check |
+| The power calculator agrees 50 cannot resolve 3 points | P7-04 | `conformance` check |
 
 The κ row is the one worth watching. `θ*` and `Λ` are computed from the
 same `(V, κ)` pair by different formulas, and there is no structural reason they
