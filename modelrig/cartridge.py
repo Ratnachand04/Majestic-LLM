@@ -20,8 +20,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from enum import Enum
+
 from modelrig.certification import ArtefactKind, CertificationLedger
 from modelrig.ir import ArtefactIR, BuildPlanIR, SpecIR, content_hash
+
+
+class Status(str, Enum):
+    """Part 5 §13 — the field that makes a recall actionable.
+
+    Lineage answers *who is affected*. Without a status nothing can act on the
+    answer: a defective cartridge stays certified forever and the runtime keeps
+    loading it. A recall is a fleet-wide state change, so it has to be a field
+    on the artefact rather than a note in a ticket.
+    """
+
+    ACTIVE = "active"
+    DEPRECATED = "deprecated"      # superseded, still safe to run
+    RECALLED = "recalled"          # a defect was found. Must not be served.
+    SUPERSEDED = "superseded"      # a newer generation exists
+
+    @property
+    def servable(self) -> bool:
+        """Whether the runtime may load this. Only a recall is disqualifying —
+        a deprecated cartridge still works, it is merely not the newest."""
+        return self is not Status.RECALLED
 
 
 @dataclass
@@ -106,6 +129,12 @@ class Cartridge:
     #: different numerics. A device absent from the ledger is reported as
     #: unverified; it is never assumed to behave like one that is present.
     measured_performance: CertificationLedger = field(default_factory=CertificationLedger)
+    #: §13 — lifecycle. ``status`` gates serving; the rest records why and what
+    #: replaced it, so a recall leaves a trail rather than a gap.
+    status: Status = Status.ACTIVE
+    recall_reason: str = ""
+    supersedes: str | None = None
+    superseded_by: str | None = None
     spec_hash: str = ""
     plan_hash: str = ""
     version: int = 1
@@ -141,6 +170,23 @@ class Cartridge:
         return bool(self.model_card and self.eval_certificate
                     and self.licence_chain.get("permitted", False))
 
+    @property
+    def servable(self) -> bool:
+        """Certified, and not withdrawn. Both are required to run it."""
+        return self.certified and self.status.servable
+
+    def recall(self, reason: str) -> Cartridge:
+        """Withdraw this cartridge. The reason is not optional.
+
+        A recall with no stated defect cannot be reviewed, appealed or lifted,
+        and the operator who issued it will not be the one who finds it.
+        """
+        if not reason.strip():
+            raise ValueError("a recall must state the defect it is recalling for")
+        self.status = Status.RECALLED
+        self.recall_reason = reason.strip()
+        return self
+
     def certified_for(self, device_id: str, kind: ArtefactKind | None = None) -> bool:
         """Whether this cartridge has been proven to run on **this** device.
 
@@ -171,6 +217,10 @@ class Cartridge:
             "licence_chain": dict(self.licence_chain),
             "provenance": dict(self.provenance),
             "measured_performance": self.measured_performance.to_list(),
+            "status": self.status.value,
+            "recall_reason": self.recall_reason,
+            "supersedes": self.supersedes,
+            "superseded_by": self.superseded_by,
             "spec_hash": self.spec_hash,
             "plan_hash": self.plan_hash,
             "version": self.version,
@@ -201,6 +251,10 @@ class Cartridge:
             measured_performance=CertificationLedger.from_list(
                 data.get("measured_performance")
             ),
+            status=Status(str(data.get("status", "active"))),
+            recall_reason=data.get("recall_reason", ""),
+            supersedes=data.get("supersedes"),
+            superseded_by=data.get("superseded_by"),
             spec_hash=data.get("spec_hash", ""),
             plan_hash=data.get("plan_hash", ""),
             version=int(data.get("version", 1)),
