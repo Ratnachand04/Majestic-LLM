@@ -328,6 +328,119 @@ def check_elicitation_conformance() -> ConformanceReport:
 
 
 # --------------------------------------------------------------------------- #
+def check_trainer_conformance() -> ConformanceReport:
+    """Assert Part 9's arithmetic and its pre-flight.
+
+    Every failure the pre-flight catches **reports success**: the loss falls,
+    the checkpoint saves, the scorecard fills in, and the model is quietly
+    wrong. A silent failure that survives evaluation is more expensive than a
+    crash, because it ships — so these checks assert the assertions still exist.
+    """
+    from modelrig.preflight import (
+        PreflightError,
+        assert_chat_template,
+        assert_no_contamination,
+        naive_microbatch_mean,
+        normalise_by_tokens,
+    )
+    from modelrig.trainer import (
+        LORA_PLUS_LAMBDA,
+        CandidateMode,
+        PreferenceMethod,
+        adapter_bytes,
+        full_finetune_bytes,
+        memory_plan,
+        training_flops,
+    )
+
+    report = ConformanceReport()
+
+    # §2: the ~30 MB adapter figure the whole series quotes must remain
+    # attributable to r=16 on a 1.7B base.
+    report.checks_run += 1
+    size_mb = adapter_bytes(16) / 1_000_000
+    if not 28 <= size_mb <= 38:
+        report.add(check="adapter_size_derivation", subject="adapter_bytes",
+                   source="P9-02",
+                   detail=(f"r=16 on a 1.7B base gives {size_mb:.0f} MB; the series "
+                           "quotes ~30 MB, and the figure must stay derived rather "
+                           "than asserted"))
+
+    # §5-§6: QLoRA must remain an order-of-magnitude reduction, or the claim
+    # that a build runs on a laptop GPU stops holding.
+    report.checks_run += 1
+    plan = memory_plan(1_720_000_000, rank=16, batch=4)
+    if not 5 <= plan.reduction <= 20:
+        report.add(check="qlora_reduction", subject="memory_plan", source="P9-06",
+                   detail=(f"QLoRA reduces memory {plan.reduction:.1f}x; the design "
+                           "rests on roughly an order of magnitude"))
+    report.checks_run += 1
+    if full_finetune_bytes(1_700_000_000) <= 24 * 1_000_000_000:
+        report.add(check="full_ft_does_not_fit", subject="full_finetune_bytes",
+                   source="P9-05",
+                   detail="full fine-tuning a 1.7B base must not fit a 24 GB card")
+
+    # §9: LoRA skips backward-to-weights, so 4PN against 6PN.
+    report.checks_run += 1
+    ratio = training_flops(1e9, 1e6, full_finetune=True) / training_flops(1e9, 1e6)
+    if abs(ratio - 1.5) > 1e-6:
+        report.add(check="lora_flops", subject="training_flops", source="P9-09",
+                   detail=f"full/LoRA FLOP ratio is {ratio:.2f}, should be 6/4")
+
+    # §8: token-level normalisation must differ from microbatch averaging on
+    # unequal lengths, or the bias it exists to prevent is not being prevented.
+    report.checks_run += 1
+    if normalise_by_tokens([1.0, 3.0], [900, 100]) >= naive_microbatch_mean([1.0, 3.0]):
+        report.add(check="token_normalisation", subject="normalise_by_tokens",
+                   source="P9-08",
+                   detail=("microbatch averaging overweights short sequences; the "
+                           "token-normalised loss must differ on unequal lengths"))
+
+    # §12: hedge and sweep must stay separate. One flag governing two opposite
+    # decisions is what this correction exists to undo.
+    report.checks_run += 1
+    if CandidateMode.HEDGE.default_enabled or not CandidateMode.SWEEP.default_enabled:
+        report.add(check="hedge_versus_sweep", subject="CandidateMode", source="P9-12",
+                   detail=("hedging is governed by Part 2 §15 and stays opt-in; a "
+                           "sweep is model selection and is cheap enough to default on"))
+
+    # §17: KTO must remain the unpaired method, because that is the shape field
+    # feedback arrives in.
+    report.checks_run += 1
+    if not PreferenceMethod.KTO.accepts_unpaired or \
+            PreferenceMethod.DPO.accepts_unpaired:
+        report.add(check="kto_accepts_unpaired", subject="PreferenceMethod",
+                   source="P9-17",
+                   detail=("field feedback is a thumbs-up on ONE output; building "
+                           "pairs from it is lossy, which is why KTO is named"))
+
+    # §11: LoRA+ must keep the two rates apart.
+    report.checks_run += 1
+    if LORA_PLUS_LAMBDA <= 1.0:
+        report.add(check="lora_plus", subject="LORA_PLUS_LAMBDA", source="P9-11",
+                   detail="B starts at zero and must travel faster than A")
+
+    # §18-§19: the assertions must still raise. A check that returns a verdict
+    # can be ignored; one that raises cannot.
+    for name, call, source in (
+        ("contamination_raises",
+         lambda: assert_no_contamination(["a"], ["a"]), "P9-18"),
+        ("template_mismatch_raises",
+         lambda: assert_chat_template("### {role}", "<|im_start|>"), "P9-19"),
+    ):
+        report.checks_run += 1
+        try:
+            call()
+            report.add(check=name, subject="preflight", source=source,
+                       detail=("this must raise: a silent failure here reports "
+                               "success and ships a broken model"))
+        except PreflightError:
+            pass
+
+    return report
+
+
+# --------------------------------------------------------------------------- #
 def check_data_factory_conformance() -> ConformanceReport:
     """Assert Part 8's rules about how training data is made.
 
@@ -815,13 +928,15 @@ def run_all(catalogue: Catalogue | None = None) -> ConformanceReport:
     fabric = check_fabric_conformance()
     proving = check_proving_ground_conformance()
     factory = check_data_factory_conformance()
+    trainer = check_trainer_conformance()
     merged = ConformanceReport(
         findings=(compat.findings + arch.findings + forge.findings + device.findings
                   + planner.findings + registry.findings + fabric.findings
-                  + proving.findings + factory.findings),
+                  + proving.findings + factory.findings + trainer.findings),
         checks_run=(compat.checks_run + arch.checks_run + forge.checks_run
                     + device.checks_run + planner.checks_run + registry.checks_run
-                    + fabric.checks_run + proving.checks_run + factory.checks_run),
+                    + fabric.checks_run + proving.checks_run + factory.checks_run
+                    + trainer.checks_run),
     )
     logger.info(
         "conformance: %d checks, %d errors, %d warnings",
