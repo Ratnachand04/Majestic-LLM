@@ -301,6 +301,64 @@ def check_elicitation_conformance() -> ConformanceReport:
 
 
 # --------------------------------------------------------------------------- #
+def check_planner_conformance() -> ConformanceReport:
+    """Assert Part 2's structural claims still hold over the live catalogue.
+
+    Both of these are load-bearing arguments rather than implementation details,
+    and both can be invalidated by a catalogue change that reports no error
+    anywhere else.
+    """
+    from modelrig.planner.audit import plan_space_size
+    from modelrig.planner.predicates import ALL_PREDICATES, HARD, SOFT, ordered_predicates
+
+    report = ConformanceReport()
+
+    # §2.2: the whole algorithm rests on the plan space being enumerable. A
+    # catalogue that grew by orders of magnitude would invalidate the argument
+    # for rejecting search while every test still passed.
+    space = plan_space_size()
+    report.checks_run += 1
+    if not space["enumerable"]:
+        report.add(check="plan_space_enumerable", subject="catalogue", source="P2-02",
+                   detail=(f"the plan space is 10^{space['log10']} points; beyond 10^8 "
+                           "exhaustive enumeration stops being the correct algorithm "
+                           "and the argument for rejecting search fails"))
+
+    # §16: the partition must stay a partition. A predicate in neither set is
+    # one whose refusals cannot be attributed, and one in both makes the
+    # stratified report incoherent.
+    report.checks_run += 1
+    names = {p.name for p in ALL_PREDICATES}
+    if set(HARD) & set(SOFT) or set(HARD) | set(SOFT) != names:
+        report.add(check="soundness_partition", subject="predicates", source="P2-16",
+                   detail=(f"HARD and SOFT must partition {sorted(names)}; got "
+                           f"hard={sorted(HARD)} soft={sorted(SOFT)}"))
+
+    # §16: the predicates sound by construction must stay marked hard. If one
+    # drifts into SOFT its refusals start being counted as evidence about
+    # calibration, which they are not.
+    for name in ("P_ram", "P_tok", "P_lic", "P_off"):
+        report.checks_run += 1
+        if name not in HARD:
+            report.add(check="sound_by_construction", subject=name, source="P2-16",
+                       detail=(f"{name} is sound by construction; marking it soft would "
+                               "put its certain refusals into the calibration numbers"))
+
+    # §4: the ordering must actually be sorted by c/(1-rho), or the early exit
+    # saves less than it reports.
+    report.checks_run += 1
+    order = ordered_predicates()
+    keys = [p.cost / max(1.0 - p.pass_rate, 1e-9) for p in order]
+    if keys != sorted(keys):
+        report.add(check="predicate_ordering", subject="ordered_predicates",
+                   source="P2-04",
+                   detail=("predicates must be evaluated cheapest-and-most-"
+                           "discriminating first: ascending in c/(1-rho)"))
+
+    return report
+
+
+# --------------------------------------------------------------------------- #
 def check_device_verification_conformance() -> ConformanceReport:
     """Assert Part 3's rules about what a device claim may say.
 
@@ -386,10 +444,12 @@ def run_all(catalogue: Catalogue | None = None) -> ConformanceReport:
     arch = check_architecture_conformance(catalogue)
     forge = check_elicitation_conformance()
     device = check_device_verification_conformance()
+    planner = check_planner_conformance()
     merged = ConformanceReport(
-        findings=compat.findings + arch.findings + forge.findings + device.findings,
+        findings=(compat.findings + arch.findings + forge.findings + device.findings
+                  + planner.findings),
         checks_run=(compat.checks_run + arch.checks_run + forge.checks_run
-                    + device.checks_run),
+                    + device.checks_run + planner.checks_run),
     )
     logger.info(
         "conformance: %d checks, %d errors, %d warnings",
