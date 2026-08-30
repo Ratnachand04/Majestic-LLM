@@ -29,7 +29,9 @@ above reads the posterior, not the parser.
 """
 from modelrig.forge.core import (
     ATTRITION_GAMMA,
+    MAX_AMBIGUITY,
     MAX_QUESTIONS,
+    AskReason,
     Interview,
     Interviewer,
     Question,
@@ -43,15 +45,19 @@ from modelrig.forge.core import (
     worth_asking,
 )
 from modelrig.forge.infogain import (
+    DEFAULT_SAMPLES,
     DELTA_SHARE,
     InfoGain,
     PlanOracle,
     PlanSignature,
     induced_plans,
     information_gain,
+    marginal_information_gain,
+    plan_diversity,
     rank,
     zero_gain,
 )
+from modelrig.forge.outcomes import InterviewOutcome, OutcomeLog, Trend
 from modelrig.forge.parser import Forge, InterviewState, Slot
 from modelrig.forge.posterior import (
     AMBIGUITY_THRESHOLD,
@@ -85,10 +91,14 @@ __all__ = [
     "AMBIGUITY_THRESHOLD", "DEFAULT_K", "ParsePosterior", "SlotPosterior",
     "candidate_values", "parse_K", "project_onto_domain", "summarise",
     # information gain, measured through the Planner
-    "DELTA_SHARE", "InfoGain", "PlanOracle", "PlanSignature",
-    "induced_plans", "information_gain", "rank", "zero_gain",
+    "DEFAULT_SAMPLES", "DELTA_SHARE", "InfoGain", "PlanOracle", "PlanSignature",
+    "induced_plans", "information_gain", "marginal_information_gain",
+    "plan_diversity", "rank", "zero_gain",
     # the interview
-    "ATTRITION_GAMMA", "MAX_QUESTIONS", "Interview", "Interviewer", "Question",
-    "Stop", "ask_order", "completion_probability", "economy", "interview",
-    "unasked_because_irrelevant", "value_ratio", "worth_asking",
+    "ATTRITION_GAMMA", "MAX_AMBIGUITY", "MAX_QUESTIONS", "AskReason", "Interview",
+    "Interviewer", "Question", "Stop", "ask_order", "completion_probability",
+    "economy", "interview", "unasked_because_irrelevant", "value_ratio",
+    "worth_asking",
+    # §6 — did the questions turn out to be worth asking?
+    "InterviewOutcome", "OutcomeLog", "Trend",
 ]
