@@ -21,7 +21,7 @@ device verdict, which is the number the product sells.
 | SmolLM2-360M | 32 | 5 | 64 | 0.36B | smollm | ✅ |
 | Llama-3.2-1B | 16 | 8 | 64 | 1.24B | llama | ✅ |
 
-**Result: 76 checks, 0 errors, 2 warnings.**
+**Result: 80 checks, 0 errors, 2 warnings.**
 
 The two warnings are real and worth keeping visible: there is no teacher in the
 `llama` or `smollm` tokenizer families, so bases from those families can only use
@@ -94,7 +94,8 @@ failure names the diagram it came from.
 | Parallel candidates, score both, pick one | B-01, C-02 | `candidates` |
 | Nothing probed or derived is ever asked | P4-10 | `forge.slots.validate_table` |
 | The elicited set stays a minority of the schema | P4-09 | `conformance` check |
-| γ leaves 4 questions completing and 40 not | P4-04 | `conformance` check |
+| γ reproduces §4's stated 82% / 61% / 37% | P4-04 | `conformance` check |
+| The ambiguity ceiling binds | P4-05 | `conformance` check |
 | Raising κ raises **both** θ\* and Λ — more refusals *and* more questions | P4-04 | `conformance` check |
 | Only a measured source may promise | P3-07 | `conformance` check |
 | An unseen device is reported as unverified | P3-11 | `CertificationLedger` |
