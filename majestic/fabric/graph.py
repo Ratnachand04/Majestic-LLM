@@ -8,6 +8,8 @@ can prove none of this.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -19,6 +21,28 @@ class NodeKind(str, Enum):
     CONTROL = "control"       # branch, map, join
     INPUT = "input"
     OUTPUT = "output"
+    CONFIRM = "confirm"       # a human interposes judgement — clears taint (§10)
+
+
+class TaintRole(str, Enum):
+    """What a node does to the taint set flowing through it (§7).
+
+    ``PROPAGATE`` is the default for cartridges and it is load-bearing. The
+    tempting error is to treat a model as a sanitiser — "it read the scraped
+    page and wrote its own summary, so the output is the model's" — which is
+    false: a model given injected instructions emits attacker-chosen content.
+    §12 gives the one condition under which propagation can be weakened, and it
+    is not "we trust the model".
+    """
+
+    SOURCE = "source"        # introduces untrusted content
+    PROPAGATE = "propagate"  # passes taint through. The default.
+    CLEAR = "clear"          # a human approved it
+    NONE = "none"            # produces nothing tainted
+
+
+#: Capacity of an unconstrained output, in bits. Free text is an open channel.
+UNBOUNDED_BITS = float("inf")
 
 
 @dataclass
@@ -53,6 +77,61 @@ class Node:
     output_type: str = "any"
     cartridge_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    #: §6 — when a node needs the network only under a condition, the condition
+    #: is named here. An escalating router is ``requires_network=False`` with
+    #: ``net_condition="confidence_below_threshold"``: it does not need the
+    #: network to run, only to take one branch.
+    #:
+    #: This is NOT how offline closure is proven. A condition is a runtime
+    #: value, and offline mode deletes the branch instead — see
+    #: :func:`~majestic.fabric.analyser.rewrite_offline`. The field exists so
+    #: the analyser can tell a conditional escalation apart from an
+    #: unconditional network call and report the difference honestly.
+    net_condition: str | None = None
+    #: §7 — the taint transfer function. Defaults are derived from the other
+    #: flags when left unset, so existing graphs keep their meaning.
+    taint_role: TaintRole | None = None
+    #: §12 — ``log2 |D_out|``: how many bits of the output an attacker upstream
+    #: could control. Derived from the compiled decoding grammar at package
+    #: time. ``None`` means unconstrained, which is infinite capacity.
+    output_domain_bits: float | None = None
+    #: §14 — measured or predicted per-node latency, for the critical path.
+    p50_ms: float = 0.0
+    p95_ms: float = 0.0
+    #: §15 — which adapter this node needs resident. Drives the paging schedule.
+    adapter_ref: str | None = None
+
+    @property
+    def role(self) -> TaintRole:
+        """The effective taint role, defaulted from the legacy flags."""
+        if self.taint_role is not None:
+            return self.taint_role
+        if self.kind is NodeKind.CONFIRM:
+            return TaintRole.CLEAR
+        if self.produces_untrusted:
+            return TaintRole.SOURCE
+        if self.kind in (NodeKind.CARTRIDGE, NodeKind.CONTROL):
+            return TaintRole.PROPAGATE
+        return TaintRole.NONE
+
+    @property
+    def capacity_bits(self) -> float:
+        """Channel capacity of this node's output (§11-§12).
+
+        A node that constrains its output to a finite domain can carry only
+        ``log2|D|`` bits of attacker influence, whatever it read. A node with an
+        unconstrained output carries everything.
+        """
+        if self.role is TaintRole.CLEAR:
+            return 0.0
+        if self.output_domain_bits is None:
+            return UNBOUNDED_BITS
+        return float(self.output_domain_bits)
+
+    @property
+    def net_unconditional(self) -> bool:
+        """§6: needs the network on every path, not merely on one branch."""
+        return self.requires_network and self.net_condition is None
 
 
 @dataclass
@@ -62,6 +141,34 @@ class FabricGraph:
     name: str = "graph"
     nodes: dict[str, Node] = field(default_factory=dict)
     edges: list[tuple[str, str]] = field(default_factory=list)
+    graph_version: str = "1.0.0"
+    owner_id: str = ""
+    #: §11 — bits of attacker influence tolerated at a privileged sink. Zero
+    #: recovers the strict "no taint reaches privilege" rule. Set it per sink by
+    #: CONSEQUENCE: one bit that flips an authorisation is worse than ten that
+    #: pick a label.
+    max_taint_capacity_bits: float = 0.0
+
+    @property
+    def graph_hash(self) -> str:
+        """Content hash over the structure the proofs were established on.
+
+        §3: a verified graph carries its own certificate, and the certificate is
+        invalidated by any edit. Hashing the structure is what makes "any edit"
+        detectable rather than a matter of trust.
+        """
+        payload = {
+            "version": self.graph_version,
+            "nodes": sorted(
+                (n.name, n.kind.value, n.requires_network, n.net_condition,
+                 n.privileged, n.role.value, n.output_domain_bits, n.adapter_ref)
+                for n in self.nodes.values()
+            ),
+            "edges": sorted(self.edges),
+            "max_taint_capacity_bits": self.max_taint_capacity_bits,
+        }
+        blob = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+        return hashlib.sha256(blob).hexdigest()[:32]
 
     # -- construction ----------------------------------------------------- #
     def add(self, node: Node) -> Node:
@@ -104,6 +211,22 @@ class FabricGraph:
         if len(order) != len(self.nodes):
             raise ValueError(f"graph {self.name!r} contains a cycle; Fabric graphs must be acyclic")
         return order
+
+    def sources(self) -> list[str]:
+        """Nodes that introduce untrusted content."""
+        return [n for n, node in self.nodes.items() if node.role is TaintRole.SOURCE]
+
+    def privileged_sinks(self) -> list[str]:
+        """Nodes with real-world authority. The things taint must not reach."""
+        return [n for n, node in self.nodes.items() if node.privileged]
+
+    def bases(self) -> set[str]:
+        """Distinct model bases the graph would hold resident (§13)."""
+        return {
+            str(node.metadata.get("base_ref", node.cartridge_id or name))
+            for name, node in self.nodes.items()
+            if node.kind is NodeKind.CARTRIDGE
+        }
 
     def paths_between(self, src: str, dst: str) -> list[list[str]]:
         """All simple paths from ``src`` to ``dst`` (graph is acyclic)."""
