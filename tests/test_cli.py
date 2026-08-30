@@ -57,7 +57,8 @@ def test_forge_command(tmp_path: Path, capsys):
     out_path = tmp_path / "spec.json"
     code = main([
         "forge", "Classify support tickets by sentiment on an android phone",
-        "--offline", "--seed-count", "150", "--out", str(out_path),
+        "--offline", "--seed-count", "150", "--rights", "customer_owned",
+        "--out", str(out_path),
     ])
     assert code == 0
     out = capsys.readouterr().out
@@ -68,6 +69,20 @@ def test_forge_command(tmp_path: Path, capsys):
 def test_forge_refuses_to_guess(capsys):
     assert main(["forge", "please do the needful"]) == 2
     assert "cannot emit a spec yet" in capsys.readouterr().out
+
+
+def test_forge_refuses_at_gate_1_without_data_rights(capsys):
+    """§11: a Gate 1 refusal is remediable by the user, so FORGE explains it.
+
+    The old behaviour emitted a spec carrying data_rights='unknown', which is
+    exactly the silent default the interview exists to prevent.
+    """
+    code = main(["forge", "Classify support tickets by sentiment on an android "
+                 "phone", "--offline", "--seed-count", "150"])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "REFUSED at Gate 1" in out
+    assert "data rights" in out
 
 
 def test_compile_command(tmp_path: Path, capsys):
