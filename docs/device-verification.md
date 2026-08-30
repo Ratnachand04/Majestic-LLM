@@ -205,7 +205,7 @@ Six coordinates, not one:
 | `ram_free_mb` | max base size |
 | `bw_eff × thermal_derate` | max base size under latency |
 | `simd` flags | **quantisation format** |
-| `accelerator` | target format (GGUF / CoreML / ONNX / ExecuTorch) |
+| `accelerator` | **runtime container** (GGUF / CoreML / ONNX / ExecuTorch) |
 | `ram_free − weights` | **context budget** |
 | `storage_free_mb` | merged vs separate |
 
@@ -215,6 +215,26 @@ length, so on a tight device the plan does not merely pick a smaller model — i
 which feeds back into the retrieval design. `context_budget()` derives it; it is
 never elicited. **Device constraints propagate upward into task design, not only
 downward into model size.**
+
+Two of these are separate questions that get collapsed. The **quantiser** comes
+from the SIMD flags; the **container** comes from the accelerator. Selecting the
+container from the device's *name* — `android_*` implies GGUF — is exactly the
+guess the probe exists to replace, since two units in the same class can differ
+in whether an NPU delegate is usable at all. `target_formats_for()` maps it, and
+a measured accelerator overrides the class prior:
+
+| accelerator | containers, best-supported first | offline |
+|---|---|---|
+| `cpu` | `gguf`, `onnx`, `executorch` | all three |
+| `gpu` | `onnx`, `gguf`, `vllm` | `vllm` dropped — it needs a server |
+| `npu` | `executorch`, `coreml`, `onnx` | all three |
+| `ane` | `coreml`, `executorch` | both |
+
+So an android tablet whose probe reports an NPU is no longer offered GGUF at all,
+where the device-name prior would have ranked it first. An accelerator nobody has
+mapped falls back to the CPU containers — conservative rather than correct, and
+logged as such.
+
 
 ## The compounding device model
 
@@ -269,12 +289,75 @@ only refuse.
 
 ## What is certified
 
-Certification is **per device, not per artefact** — the same cartridge may be
-certified for one SoC and uncertified for another, and a device absent from the
-array is honestly reported as unverified.
+Implemented in [`certification.py`](../modelrig/certification.py); the array lives
+on the cartridge manifest as `measured_performance`.
 
-The on-device **eval subset matters more than the throughput number**. Compilation
-and format conversion introduce numerical differences; an artefact that quantised
+```
+DeviceCertificate
+  device_id, source          customer_device | device_lab | emulated | interpolated
+  artefact_kind              merged | separate
+  tokens_per_s               burst
+  tokens_per_s_sustained     after the thermal derate — what promises use
+  peak_ram_mb
+  eval_subset_score          ran ON the device
+  eval_subset_size
+  output_parity              against the workstation's outputs
+  energy_per_1k_tokens_j
+```
+
+Three properties, and each is the difference between a certificate and a
+decoration.
+
+**A build certificate is not a device certificate.** `Cartridge.certified` says
+the build was evaluated and licensed. `Cartridge.certified_for(device_id)` says it
+has been proven to run on *this* silicon. They are different questions with
+different answers, and the manifest keeps them apart.
+
+**Certification is per device.** The same cartridge may be certified for one SoC
+and uncertified for another. A device absent from the array is reported as
+unverified — never as passing, never as failing, and never silently defaulted to
+the nearest device that happens to be present. A ledger that answers "yes" for a
+device it never saw is worse than no ledger at all.
+
+**Certification is per artefact kind.** A merged model and a base-plus-adapter
+pair are different artefacts with different numerics, so a certificate earned by
+one says nothing about the other:
+
+```
+UNVERIFIED on sm-a536b for the separate artefact — the merged artefact was
+certified there, and the two have different numerics
+```
+
+### The eval subset is what closes the loop
+
+Throughput alone certifies nothing, so a run that only measured tokens per second
+is **refused a certificate** and reported as `THROUGHPUT ONLY`. Compilation and
+format conversion introduce numerical differences: an artefact that quantised
 cleanly on a workstation can produce different outputs through a different runtime
-on a different SoC. Running even 20 held-out examples on the actual device is the
-only check that closes the loop between "we built it" and "it works there".
+on a different SoC — same weights, same grammar, different answers.
+
+`output_parity` catches it. Aggregate score can hold steady while individual
+answers change, which is the same failure the answer-flip rate catches after
+quantisation, reappearing at the runtime boundary. Below 95% parity the eval
+certificate does not transfer, and the run is refused with that reason. Twenty
+held-out examples on the actual device is the floor, and it is the only check that
+closes the loop between "we built it" and "it works there".
+
+A run is also refused when the on-device score falls more than 0.03 below the
+workstation's (*the artefact degraded in transit, not in training*), when peak RAM
+exceeds what the device makes available in production, or when the profile behind
+it was never measured. A benchmark whose sustained rate *exceeds* its burst rate
+is rejected outright rather than fitted — that is a broken run, not a device that
+defies the roofline, and fitting it would launder the error into a promise.
+
+### One discrepancy
+
+§11's illustrative record pairs `tokens_per_s_sustained: 5.4` with
+`energy_per_1k_tokens_j: 41.2`. Those cannot both hold: 1000 tokens at 5.4 tok/s
+takes 185 seconds, so 41.2 J implies a package draw of **0.22 W** — roughly 16×
+below the 3.5 W Part 4 §13.6 establishes for sustained mobile inference. The same
+pair at 3.5 W is 648 J.
+
+The implementation computes `E = P·t` from the *measured* draw, which is
+consistent with §13.6 and with the physics. The spec's figure is treated as a typo
+in an example rather than a constant to reproduce.
