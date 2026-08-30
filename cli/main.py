@@ -40,6 +40,9 @@ def build_parser() -> argparse.ArgumentParser:
     fo.add_argument("--offline", action="store_true", help="Answer the offline slot")
     fo.add_argument("--device", help="Answer the device slot")
     fo.add_argument("--seed-count", type=int, help="How many real examples exist")
+    fo.add_argument("--rights", choices=("customer_owned", "licensed",
+                                        "public_domain", "no_training"),
+                    help="Answer the data-rights slot (Gate 1 refuses without it)")
     fo.add_argument("--tier", default="commercial",
                     choices=("experimental", "commercial", "regulated"),
                     help="Customer tier: sets how many questions are worth asking")
@@ -218,14 +221,26 @@ def _cmd_forge(args: argparse.Namespace) -> int:
         answers["device_target"] = args.device
     if args.seed_count is not None:
         answers["seed_data_count"] = args.seed_count
+    if args.rights:
+        answers["data_rights"] = args.rights
 
     tier = Tier(args.tier)
     iv = Interviewer(tier=tier).conduct(args.description, answers=answers)
 
+    # §11: a Gate 1 refusal is remediable by the user, so FORGE owns explaining
+    # it — unlike Gate 2, which is the Planner's to account for.
+    if iv.gate1 is not None and not iv.gate1.passed:
+        print("REFUSED at Gate 1 — the request is not admissible as stated:")
+        for reason in iv.gate1.reasons:
+            print(f"  - {reason}")
+        return 2
+
     if not iv.complete:
         print(f"cannot emit a spec yet: {len(iv.pending)} slot(s) unfilled")
         for q in iv.pending:
-            print(f"  - {q.text}")
+            print(f"  [{q.reason.value}] {q.text}")
+        for slot in iv.unresolved_ambiguities:
+            print(f"  [ambiguous] {slot}: the description supports two readings")
         return 2
 
     spec = iv.spec
@@ -244,6 +259,12 @@ def _cmd_forge(args: argparse.Namespace) -> int:
             flag = "must" if q.must_ask else f"{q.value:.2f} > {q.threshold}"
             print(f"  [{flag:>12}] {q.text}")
             print(f"                 {q.rationale}")
+
+    if iv.needs_probe:
+        print()
+        print("  PROBE recommended — it settles "
+              f"{len(iv.probe_request['collapses'])} device slot(s) and costs no "
+              "questions, and it is what lets a latency budget be promised.")
 
     irrelevant = unasked_because_irrelevant(iv)
     if irrelevant and args.explain:
