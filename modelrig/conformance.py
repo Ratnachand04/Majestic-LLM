@@ -328,6 +328,76 @@ def check_elicitation_conformance() -> ConformanceReport:
 
 
 # --------------------------------------------------------------------------- #
+def check_proving_ground_conformance() -> ConformanceReport:
+    """Assert Part 7's statistical rules.
+
+    Majestic sells a certificate rather than a model file, so these are the
+    checks that keep the product from being a lie with good typography. Both
+    corrections they enforce failed silently before: a point-estimate gate looks
+    like it works, and seven blocking axes look conservative.
+    """
+    from modelrig.proving_ground import BLOCKING_AXES
+    from modelrig.stats import certifies, clopper_pearson_lcb, required_n, wilson
+
+    report = ConformanceReport()
+
+    # §5: the gate is a hypothesis test. A point-estimate comparison at n=50
+    # certifies a claim the data cannot carry, and nothing else would report it.
+    report.checks_run += 1
+    if certifies(47, 50, 0.93):
+        report.add(check="gate_on_lower_bound", subject="certifies", source="P7-05",
+                   detail=("47/50 must NOT certify a 0.93 gate: the interval spans "
+                           "fourteen points, so the observed score and the gate are "
+                           "statistically indistinguishable"))
+
+    # §3: one error in fifty must break a 0.93 claim. If this ever passes, the
+    # bound has been replaced by something optimistic.
+    report.checks_run += 1
+    if certifies(49, 50, 0.93) or not certifies(50, 50, 0.93):
+        report.add(check="one_error_breaks_the_claim", subject="clopper_pearson_lcb",
+                   source="P7-03",
+                   detail=(f"at n=50 a perfect sweep bounds at "
+                           f"{clopper_pearson_lcb(50, 50):.3f} and one error at "
+                           f"{clopper_pearson_lcb(49, 50):.3f}; only the first may "
+                           "certify 0.93"))
+
+    # §3: the interval must not collapse at the boundary. A normal approximation
+    # gives zero width at k=n, which would certify anything on five examples.
+    report.checks_run += 1
+    if wilson(5, 5).low > 0.7:
+        report.add(check="interval_honest_at_the_boundary", subject="wilson",
+                   source="P7-03",
+                   detail=("a clean sweep of five must not produce a narrow "
+                           "interval; that is how an approximation certifies noise"))
+
+    # §9: exactly four axes block. Seven would reject four good models in five.
+    report.checks_run += 1
+    if len(BLOCKING_AXES) != 4:
+        report.add(check="four_blocking_axes", subject="BLOCKING_AXES", source="P7-09",
+                   detail=(f"{len(BLOCKING_AXES)} blocking axes: at 80% power each, "
+                           f"P(ship | good) = 0.8^{len(BLOCKING_AXES)}, and seven "
+                           "blocking gates ships only 21% of good models"))
+
+    # §9: the axes that block are chosen by consequence — the job, two unbounded
+    # losses, and one deterministic check that costs no power.
+    for name in ("task_metric", "safety", "privacy"):
+        report.checks_run += 1
+        if name not in BLOCKING_AXES:
+            report.add(check="blocking_by_consequence", subject=name, source="P7-09",
+                       detail=f"{name} must block: it is the job or its loss is unbounded")
+
+    # §4: the power calculator must agree that fifty examples cannot resolve a
+    # three-point gate. If it ever does, the sizing formula has drifted.
+    report.checks_run += 1
+    if required_n(0.93, 0.96) < 200:
+        report.add(check="power_calculator", subject="required_n", source="P7-04",
+                   detail=(f"detecting three points above a 0.93 gate needs about 380 "
+                           f"examples; the calculator says {required_n(0.93, 0.96)}"))
+
+    return report
+
+
+# --------------------------------------------------------------------------- #
 def check_fabric_conformance() -> ConformanceReport:
     """Assert Part 6's analysis rules.
 
@@ -643,12 +713,14 @@ def run_all(catalogue: Catalogue | None = None) -> ConformanceReport:
     planner = check_planner_conformance()
     registry = check_registry_conformance()
     fabric = check_fabric_conformance()
+    proving = check_proving_ground_conformance()
     merged = ConformanceReport(
         findings=(compat.findings + arch.findings + forge.findings + device.findings
-                  + planner.findings + registry.findings + fabric.findings),
+                  + planner.findings + registry.findings + fabric.findings
+                  + proving.findings),
         checks_run=(compat.checks_run + arch.checks_run + forge.checks_run
                     + device.checks_run + planner.checks_run + registry.checks_run
-                    + fabric.checks_run),
+                    + fabric.checks_run + proving.checks_run),
     )
     logger.info(
         "conformance: %d checks, %d errors, %d warnings",
