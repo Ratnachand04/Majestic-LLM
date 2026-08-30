@@ -75,8 +75,9 @@ def gate1_spec_admissibility(
         reasons.append(
             f"seed data {spec.seed_data_count} is below the floor of "
             f"{prim.seed_floor} real examples for primitive "
-            f"{prim.primitive.value!r}; amplifying from fewer risks irreversible "
-            "tail loss (Curse of Recursion 2305.17493)"
+            f"{prim.primitive.value!r}. Amplification multiplies effective data "
+            "by at most (1 + kappa) and cannot extend the support of the seed "
+            "set, so more generation will not substitute for more seeds"
         )
 
     # 3. data rights sufficient to train AND deploy
