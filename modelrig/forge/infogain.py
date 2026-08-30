@@ -34,13 +34,18 @@ questions instead of forty.
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Iterable, Sequence
 
 from majestic.logging_utils import get_logger
 from modelrig.forge import slots as slot_table
-from modelrig.forge.posterior import ParsePosterior, candidate_values
+from modelrig.forge.posterior import (
+    ParsePosterior,
+    candidate_values,
+    canonical_key,
+)
 from modelrig.ir import SpecIR
 
 logger = get_logger(__name__)
@@ -322,16 +327,30 @@ def rank(
     oracle: Oracle,
     *,
     max_values: int = DEFAULT_MAX_VALUES,
+    marginal: bool = True,
+    samples: int = 12,
 ) -> list[InfoGain]:
     """Score every candidate slot and order it by what its answer is worth.
+
+    ``marginal`` selects §3's estimator, which marginalises over the other
+    slots' posteriors rather than pinning them at stand-ins. It discriminates
+    far better — the pinned estimator saturates its own normalisation and ties
+    slots at the ceiling — and it costs a few hundred memoised plan calls.
 
     Ties break toward the slot the *table* already believed was high-gain, and
     then by name, so the interview is reproducible question for question.
     """
-    scored = [
-        information_gain(n, posterior, build_spec, oracle, max_values=max_values)
-        for n in names
-    ]
+    if marginal and posterior is not None:
+        scored = [
+            marginal_information_gain(n, posterior, build_spec, oracle,
+                                      max_values=max_values, samples=samples)
+            for n in names
+        ]
+    else:
+        scored = [
+            information_gain(n, posterior, build_spec, oracle, max_values=max_values)
+            for n in names
+        ]
     scored.sort(key=lambda g: (-g.gain * g.stake, -_prior(g.slot), g.slot))
     return scored
 
@@ -347,7 +366,161 @@ def zero_gain(scored: Iterable[InfoGain]) -> list[str]:
 
 
 __all__ = [
-    "DEFAULT_MAX_VALUES", "DELTA_SHARE",
+    "DEFAULT_MAX_VALUES", "DEFAULT_SAMPLES", "DELTA_SHARE",
     "InfoGain", "Oracle", "PlanOracle", "PlanSignature", "SpecBuilder",
-    "induced_plans", "information_gain", "rank", "zero_gain",
+    "induced_plans", "information_gain", "marginal_information_gain",
+    "plan_diversity", "rank", "zero_gain",
 ]
+
+
+# =========================================================================== #
+# The marginalised estimator (§3)
+# =========================================================================== #
+#: How many full specs to draw from the slot posteriors when marginalising.
+#: §3 uses K=20 at ~15 slots, which is ~300 plan invocations — under a second
+#: given a Planner that runs in milliseconds and a memoising oracle.
+DEFAULT_SAMPLES = 20
+
+
+def plan_diversity(signatures: Sequence[PlanSignature]) -> float:
+    """``V`` — normalised diversity over a bag of plans.
+
+    §3 suggests normalised Hamming distance across plan coordinates, and that is
+    what this is: the mean per-coordinate probability that two independently
+    drawn plans disagree. It is 0 when every sampled plan is identical and rises
+    toward 1 as the coordinates spread out, so it behaves like an entropy while
+    staying linear in the sample count.
+    """
+    if len(signatures) < 2:
+        return 0.0
+    fields = ("admitted", "base_ref", "quantiser", "target", "distil_mode",
+              "grammar_ref", "eval_suite_ref", "witness")
+    total = 0.0
+    for name in fields:
+        counts: dict[Any, int] = {}
+        for sig in signatures:
+            key = getattr(sig, name)
+            counts[key] = counts.get(key, 0) + 1
+        n = len(signatures)
+        # 1 - sum p^2 : the chance two draws differ on this coordinate.
+        total += 1.0 - sum((c / n) ** 2 for c in counts.values())
+    return total / len(fields)
+
+
+def marginal_information_gain(
+    slot: str,
+    posterior: ParsePosterior,
+    build_spec: SpecBuilder,
+    oracle: Oracle,
+    *,
+    max_values: int = DEFAULT_MAX_VALUES,
+    samples: int = DEFAULT_SAMPLES,
+    seed: int = 0,
+) -> InfoGain:
+    """``IG = V(plans) - E_v[V(plans | sigma_i = v)]`` — §3's estimator.
+
+    The difference from :func:`information_gain` is what the *other* slots are
+    doing. That function holds them at a point and varies only ``sigma_i``, which
+    measures a ceteris-paribus sensitivity. This one draws full specs
+    ``s ~ prod_i p_i`` from every slot posterior, so the number it returns is the
+    *reduction* in plan diversity attributable to learning ``sigma_i`` while
+    everything else stays uncertain.
+
+    That distinction is not academic. Pinning the other slots makes the answer
+    depend on where they were pinned: with a generous latency budget standing in,
+    input length looks irrelevant, because nothing binds. Marginalising removes
+    the hand-picked stand-in from the measurement — the estimate no longer
+    depends on a constant somebody chose.
+
+    It costs more: ``(1 + |values|) * samples`` plan invocations per slot against
+    ``|values|``. The oracle memoises on spec hash, so repeated draws are free,
+    and §3's budget of a few hundred invocations holds.
+    """
+    entry = posterior.get(slot)
+    values = candidate_values(slot, entry, limit=max_values)
+    if len(values) < 2:
+        return InfoGain(slot=slot, gain=0.0, values_tried=list(values))
+
+    rng = random.Random(seed)
+    draws = [_draw(posterior, rng, exclude=slot) for _ in range(samples)]
+
+    error: str | None = None
+    base_plans: list[PlanSignature] = []
+    for assignment in draws:
+        # The prior draw for the measured slot ranges over the SAME candidate
+        # set the conditional uses, weighted by the posterior where it has
+        # support and uniformly where it does not. Drawing it from the raw
+        # posterior instead would give a slot the description happened to state
+        # confidently a prior diversity of zero, hence a gain of zero, hence
+        # never a question — however wrong that confident reading might be.
+        sig, err = _plan_for(build_spec, oracle,
+                             {**assignment, slot: _weighted(entry, values, rng)})
+        base_plans.append(sig)
+        error = error or err
+    prior_diversity = plan_diversity(base_plans)
+
+    outcomes: dict[Any, PlanSignature] = {}
+    conditional = 0.0
+    for value in values:
+        plans: list[PlanSignature] = []
+        for assignment in draws:
+            sig, err = _plan_for(build_spec, oracle, {**assignment, slot: value})
+            plans.append(sig)
+            error = error or err
+        conditional += plan_diversity(plans)
+        # Keep one representative outcome per value, so the reason text can
+        # still name the plans the answers produce.
+        outcomes[_hashable(value)] = plans[0]
+    conditional /= len(values)
+
+    gain = max(0.0, prior_diversity - conditional)
+    admitted = {sig.admitted for sig in base_plans}
+    return InfoGain(
+        slot=slot, gain=gain, entropy_bits=prior_diversity, values_tried=list(values),
+        outcomes=outcomes, flips_admissibility=len(admitted) > 1, error=error,
+    )
+
+
+def _draw(posterior: ParsePosterior, rng: random.Random,
+          *, exclude: str = "") -> dict[str, Any]:
+    """Sample one assignment ``s ~ prod_i p_i`` over the slots with support."""
+    assignment: dict[str, Any] = {}
+    for name, entry in posterior.slots.items():
+        if name == exclude or entry.is_empty:
+            continue
+        assignment[name] = _pick(entry, entry.support, rng)
+    return assignment
+
+
+def _pick(entry: Any, values: Sequence[Any], rng: random.Random) -> Any:
+    """Draw from a slot posterior, falling back to the enumerated values."""
+    if entry is not None and getattr(entry, "support", None):
+        weights = [entry.counts.get(canonical_key(entry.name, v), 1)
+                   for v in entry.support]
+        return rng.choices(list(entry.support), weights=weights, k=1)[0]
+    return rng.choice(list(values)) if values else None
+
+
+def _weighted(entry: Any, values: Sequence[Any], rng: random.Random) -> Any:
+    """Draw from ``values``, weighted by posterior mass where there is any.
+
+    A value the parser never produced still gets weight 1, so an unmentioned
+    slot is sampled roughly uniformly over its domain — which is the honest
+    reading of "we do not know what was meant".
+    """
+    if not values:
+        return None
+    if entry is None:
+        return rng.choice(list(values))
+    weights = [entry.counts.get(canonical_key(entry.name, v), 0) + 1 for v in values]
+    return rng.choices(list(values), weights=weights, k=1)[0]
+
+
+def _plan_for(
+    build_spec: SpecBuilder, oracle: Oracle, overrides: dict[str, Any]
+) -> tuple[PlanSignature, str | None]:
+    try:
+        return PlanSignature.of(oracle(build_spec(overrides))), None
+    except Exception as exc:  # noqa: BLE001 - an unbuildable draw is an outcome
+        return PlanSignature(admitted=False, witness=("spec_invalid",)), \
+            f"{type(exc).__name__}: {exc}"
