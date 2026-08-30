@@ -249,7 +249,12 @@ def check_elicitation_conformance() -> ConformanceReport:
     nothing downstream notices until the completion rate falls.
     """
     from modelrig.forge import slots as slot_table
-    from modelrig.forge.core import ATTRITION_GAMMA, completion_probability, value_ratio
+    from modelrig.forge.core import (
+        MAX_AMBIGUITY,
+        ATTRITION_GAMMA,
+        completion_probability,
+        value_ratio,
+    )
     from modelrig.planner.objective import Tier
 
     report = ConformanceReport()
@@ -272,17 +277,18 @@ def check_elicitation_conformance() -> ConformanceReport:
                            "the probe and the derivations are meant to carry most "
                            "of the schema"))
 
-    # §4: gamma must leave a four-question interview mostly completing and a
-    # forty-question one essentially never completing. Outside that band the
-    # attrition model is not describing the thing it was fitted to.
-    report.checks_run += 1
-    if not (completion_probability(4) > 0.5 and completion_probability(40) < 0.05):
-        report.add(check="attrition_calibration", subject="ATTRITION_GAMMA",
-                   source="P4-04",
-                   detail=(f"gamma={ATTRITION_GAMMA} gives P(4)="
-                           f"{completion_probability(4):.2f} and P(40)="
-                           f"{completion_probability(40):.3f}; the shape the model "
-                           "was fitted to is P(4) > 0.5 and P(40) < 0.05"))
+    # §4 pins gamma by three stated points rather than a band: four questions
+    # complete 82% of the time, ten 61%, twenty 37%. Asserting the curve through
+    # its own published values is stronger than asserting a shape, and it is what
+    # catches gamma being changed to something that merely looks reasonable.
+    for questions, expected in ((4, 0.82), (10, 0.61), (20, 0.37)):
+        report.checks_run += 1
+        actual = completion_probability(questions)
+        if abs(actual - expected) > 0.01:
+            report.add(check="attrition_calibration", subject=f"q={questions}",
+                       source="P4-04",
+                       detail=(f"gamma={ATTRITION_GAMMA} gives P({questions})="
+                               f"{actual:.3f}; §4 states {expected:.2f}"))
 
     # §4-§6: raising kappa must make the system BOTH refuse more and ask more.
     # If these ever move in opposite directions, one of the two is miscalibrated
@@ -296,6 +302,27 @@ def check_elicitation_conformance() -> ConformanceReport:
                    detail=(f"lambda={[round(x, 2) for x in lambdas]} and "
                            f"theta*={[round(x, 2) for x in thetas]} must both rise "
                            "with trust damage: more refusals AND more questions"))
+
+
+    # §5: the ambiguity ceiling must bind. At A_max >= 1 no reading is ever
+    # contested and the third ask-trigger silently disappears — the interview
+    # would go back to picking one meaning of a sentence that supports two.
+    report.checks_run += 1
+    if not 0.0 < MAX_AMBIGUITY < 1.0:
+        report.add(check="ambiguity_ceiling", subject="MAX_AMBIGUITY", source="P4-05",
+                   detail=(f"A_max={MAX_AMBIGUITY} does not bind; ambiguity stops "
+                           "being an independent reason to ask"))
+
+    # §5: termination needs all four conditions. The Interview must not report
+    # itself complete on the strength of a spec that merely type-checks.
+    report.checks_run += 1
+    from modelrig.forge.core import Interview
+
+    complete_src = Interview.complete.fget.__doc__ or ""
+    if "four conditions" not in complete_src:
+        report.add(check="termination_conditions", subject="Interview.complete",
+                   source="P4-05", severity="warning",
+                   detail="completeness should document all four §5 conditions")
 
     return report
 
