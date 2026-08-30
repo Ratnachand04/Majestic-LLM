@@ -21,7 +21,7 @@ device verdict, which is the number the product sells.
 | SmolLM2-360M | 32 | 5 | 64 | 0.36B | smollm | ✅ |
 | Llama-3.2-1B | 16 | 8 | 64 | 1.24B | llama | ✅ |
 
-**Result: 87 checks, 0 errors, 2 warnings.**
+**Result: 92 checks, 0 errors, 2 warnings.**
 
 The two warnings are real and worth keeping visible: there is no teacher in the
 `llama` or `smollm` tokenizer families, so bases from those families can only use
@@ -110,6 +110,11 @@ failure names the diagram it came from.
 | The two hashes actually differ | P5-07 | `conformance` check |
 | No mitigation lets the real corpus shrink | P5-15 | `conformance` check |
 | Dedup approaches the size-ratio ceiling from below | P5-02 | `conformance` check |
+| A cartridge propagates taint, never sanitises | P6-10 | `conformance` check |
+| One free-text field opens the channel | P6-12 | `conformance` check |
+| `c_max = 0` reproduces binary taint exactly | P6-11 | `conformance` check |
+| A confirm node clears taint | P6-10 | `conformance` check |
+| Belady never loses to LRU | P6-15 | `conformance` check |
 
 The κ row is the one worth watching. `θ*` and `Λ` are computed from the
 same `(V, κ)` pair by different formulas, and there is no structural reason they
