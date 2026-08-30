@@ -18,6 +18,20 @@ retraining generations on accumulating corrections. The flywheel could silently
 degrade models over years before anyone notices, which is why
 :meth:`Flywheel.propose_next_version` refuses a regression and
 :class:`GenerationLog` keeps the whole history auditable.
+
+
+**Why retraining uses human corrections and never model outputs (I-03).**
+
+This is where the Curse of Recursion (2305.17493) actually applies. If
+generation ``g+1`` trained on generation ``g``'s *outputs*, that is exactly the
+recursive structure the paper describes: distribution tails lost, compounding
+across generations, and the damage is not recoverable by generating more.
+
+Part 8 §19 corrects the rest of the series on this point — single-build
+amplification is anchored on real seeds and is therefore subject to saturation
+rather than collapse. The flywheel is the one place where the feedback loop is
+real, which is why the invariant forbidding it belongs here and the citation is
+precisely on point.
 """
 from __future__ import annotations
 
