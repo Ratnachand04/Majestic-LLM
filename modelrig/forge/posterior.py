@@ -222,6 +222,19 @@ class SlotPosterior:
         return 1.0 - self.mode_mass
 
     @property
+    def effective_ambiguity(self) -> float:
+        """``A_i``, floored when the parser flagged the reading itself.
+
+        §2 measures ambiguity by resampling and counting disagreement, which is
+        how you detect it when nothing knows better. But the parser sometimes
+        *does* know better — it recognises "when the internet dies" as
+        supporting two readings outright — and that is stronger evidence than a
+        vote, not weaker. A declared ambiguity therefore floors at an even
+        split, so a slot every resample happened to agree on is still asked.
+        """
+        return max(self.ambiguity, 0.5) if self.declared_ambiguous else self.ambiguity
+
+    @property
     def is_empty(self) -> bool:
         return self.filled_samples == 0
 
@@ -246,6 +259,7 @@ class SlotPosterior:
             "entropy_bits": round(self.entropy, 4),
             "normalised_entropy": round(self.normalised_entropy, 4),
             "ambiguity": round(self.ambiguity, 4),
+            "effective_ambiguity": round(self.effective_ambiguity, 4),
             "confidence": round(self.confidence, 4),
             "empty": self.is_empty,
             "ambiguous": self.is_ambiguous,
