@@ -21,7 +21,7 @@ device verdict, which is the number the product sells.
 | SmolLM2-360M | 32 | 5 | 64 | 0.36B | smollm | ✅ |
 | Llama-3.2-1B | 16 | 8 | 64 | 1.24B | llama | ✅ |
 
-**Result: 100 checks, 0 errors, 2 warnings.**
+**Result: 110 checks, 0 errors, 2 warnings.**
 
 The two warnings are real and worth keeping visible: there is no teacher in the
 `llama` or `smollm` tokenizer families, so bases from those families can only use
@@ -87,7 +87,7 @@ failure names the diagram it came from.
 | Constrained tool-call schema, capped step depth | A-09 | `agent.react`, `grammar` |
 | Untrusted content cannot reach a privileged tool | A-09, B-10 | analyser + runtime + ReAct loop |
 | Every gate checked before any GPU | B-03 | `gates`, `pipeline` |
-| Seed floor or refuse | B-06 | `data_factory` |
+| Seed floor or refuse — because amplification is capped at (1+κ), not because of recursive collapse | P8-19, P8-20 | `data_factory`, `gates` |
 | Seven axes run, **four block** (superseded B-07's "all must pass") | P7-09 | `proving_ground` |
 | Repairer acts only on external evidence | B-07 | `Repairer.repair` |
 | Base stored once; lineage is a query | B-08 | `registry.CartridgeRegistry` |
@@ -121,6 +121,11 @@ failure names the diagram it came from.
 | Exactly four axes block | P7-09 | `conformance` check |
 | The blocking set is chosen by consequence | P7-09 | `conformance` check |
 | The power calculator agrees 50 cannot resolve 3 points | P7-04 | `conformance` check |
+| Augmentation keeps a real label and needs no teacher | P8-01 | `conformance` check |
+| Augmented data is never quality-filtered | P8-12 | `conformance` check |
+| N_eff counts modes, not rows | P8-07 | `conformance` check |
+| Amplification reduces the seed floor without eliminating it | P8-20 | `conformance` check |
+| The collapse citation sits at the flywheel, not the factory | P8-19 | `conformance` check |
 
 The κ row is the one worth watching. `θ*` and `Λ` are computed from the
 same `(V, κ)` pair by different formulas, and there is no structural reason they
