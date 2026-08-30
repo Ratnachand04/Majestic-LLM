@@ -24,7 +24,7 @@ the "one flexible model" framing has no answer and this one does.
 |---|---|---|---|
 | 1 | FORGE | `modelrig/forge/` | slot-filling interview → Spec IR, with the Planner scoring which questions are worth asking ([detail](forge.md)) |
 | 2 | PLANNER | `modelrig/planner/` | enumeration + seven predicates → Build Plan IR **or a refusal** ([detail](planner.md)) |
-| 3 | DATA FACTORY | `modelrig/data_factory.py` | seed-anchored amplification with collapse guardrails |
+| 3 | DATA FACTORY | `modelrig/data_factory.py`, `augment.py`, `diversity.py` | augmentation first, then backtranslation, then synthesis; generation stops at saturation ([detail](data-factory.md)) |
 | 4 | TRAINER | `modelrig/planes.py`, `modelrig/training_hf.py` | LoRA/QLoRA (heavy) or the offline classifier path |
 | 5 | PROVING GROUND | `modelrig/proving_ground.py`, `modelrig/stats.py` | seven axes run, **four block**; the gate is a hypothesis test on the lower bound ([detail](proving-ground.md)) |
 | 6 | REGISTRY | `modelrig/registry.py` | content-addressed cartridges, dedup, lineage, recall, and a cache that cannot leak between customers ([detail](registry.md)) |
