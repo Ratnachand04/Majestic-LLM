@@ -53,7 +53,7 @@ FORGE -> Spec IR -> [GATE 1] -> PLANNER -> Build Plan IR -> [GATE 2]
 | 4 | **TRAINER** | LoRA/QLoRA by default; parallel candidates where the plan is uncertain |
 | 5 | **PROVING GROUND** | seven axes, all must pass; re-run in full after quantisation |
 | 6 | **REGISTRY** | content-addressed cartridges; base stored once, adapters are deltas; per-customer cache isolation and fleet recall ([detail](docs/registry.md)) |
-| 7 | **FABRIC** | typed DAG, statically verified for offline closure, RAM and cost — and it runs |
+| 7 | **FABRIC** | typed DAG, statically verified for offline closure, RAM, latency and **channel capacity** — and it runs ([detail](docs/fabric.md)) |
 
 **Every gate is checked before any GPU is spent.** A refusal in eight seconds is
 a better product than a failed build in ninety minutes:
@@ -81,8 +81,17 @@ stage    : gate1  (no planning, no data, no GPU)
   recalibrated afterwards.
 - **A compiled grammar, not a hopeful prompt.** Schema violation is impossible
   rather than unlikely.
-- **Untrusted content cannot reach a privileged tool** — proven statically, then
-  enforced again at runtime.
+- **Untrusted content cannot reach a privileged tool** — proven statically in one
+  linear pass, then enforced again at runtime, with the two verdicts asserted
+  against each other so analyser/executor drift is fatal rather than silent.
+- **How unsafe, not merely whether.** A cartridge's decoding grammar already
+  determines its channel capacity: a 5-way classifier leaks at most 2.3 bits and
+  is a *sanitiser*; one free-text field in the output schema makes it a
+  propagator. The analysis names the node to constrain, not just the verdict.
+- **Offline is structural, not configured.** Offline mode *deletes* the
+  escalation edges and proves closure over the rewritten graph. A threshold set
+  to infinity proves nothing — it is a runtime value one flag flip from being
+  restored.
 - **The build cache cannot serve one customer another's model.** Two independent
   barriers: `data.seed_ref` is in the cache key, so identical requirements over
   different confidential corpora never collide; and a cross-owner hit on private
@@ -1146,7 +1155,8 @@ majestic-llm/
 │   └── buildspec · compiler · planes · classifier · datasets · training_hf
 ├── majestic/                       ← the compound runtime
 │   ├── orchestrator.py · factory.py   request lifecycle + assembly
-│   ├── fabric/     graph · analyser · executor   (typed DAG that runs)
+│   ├── fabric/     graph · analyser · capacity · schedule · executor
+│   │               (typed DAG: taint capacity in bits, Belady paging)
 │   ├── serving.py                  adapter pool, batching, device RAM budget
 │   ├── agent/react.py              ReAct with a constrained tool-call schema
 │   ├── router/     rule_router · deferral   (capability routing, learned deferral)
