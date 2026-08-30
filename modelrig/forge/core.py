@@ -5,9 +5,9 @@ subjects are paid to finish. Ours are not:
 
     P(complete | q questions) = e^(-gamma * q)
 
-At ``gamma = 0.12`` roughly 62% of customers finish a four-question interview
-and under 1% finish a forty-question one. That is why "just ask everything" is
-not a conservative choice — it is the choice that guarantees no spec at all.
+At ``gamma = 0.05`` roughly 82% of customers finish a four-question interview,
+61% finish ten, and 37% finish twenty. That is why "just ask everything" is not
+a conservative choice — it is the choice that guarantees no spec at all.
 
 **The marginal rule.** Ask slot ``i`` only when what the answer is worth beats
 what the question costs:
@@ -54,14 +54,34 @@ logger = get_logger(__name__)
 
 #: Attrition per question, in the exponent of ``P(complete) = e^(-gamma q)``.
 #: HYPOTHESIS — no published elicitation study measures this, because their
-#: subjects are paid to finish. 0.12 reproduces the observed shape: a four
-#: question interview mostly completes, a forty question one never does.
-ATTRITION_GAMMA = 0.12
+#: subjects are paid to finish. 0.05 is the specified value, and it is pinned by
+#: three stated points: four questions complete 82% of the time, ten 61%, and
+#: twenty 37%. :func:`completion_probability` reproduces all three.
+ATTRITION_GAMMA = 0.05
 
 #: A backstop, not the termination condition. The marginal rule should stop
 #: first; if it does not, something upstream is miscalibrated and the interview
 #: must not run away.
 MAX_QUESTIONS = 8
+
+#: ``A_max`` — the ambiguity a spec may carry unresolved (§5 condition 3).
+#: Above it the description supports two readings and FORGE asks rather than
+#: picking one, *whatever the information gain says*. Silently defaulting an
+#: ambiguous slot is the single most expensive failure available here.
+MAX_AMBIGUITY = 0.25
+
+
+class AskReason(str, Enum):
+    """Why a slot entered the ask set. §8 lines 8-9 union three criteria.
+
+    They are genuinely different, and all three are needed. A required slot may
+    be unambiguous and score zero gain; an ambiguous slot may be optional; a
+    decision-relevant slot may be neither.
+    """
+
+    REQUIRED = "required"        # must_ask: bypasses the marginal rule
+    DECISION = "decision"        # IG * stake * Lambda > gamma
+    AMBIGUOUS = "ambiguous"      # A_i > A_max: the text supports two readings
 
 
 def completion_probability(questions: int, gamma: float = ATTRITION_GAMMA) -> float:
@@ -110,6 +130,8 @@ class Question:
     candidates: list[Any] = field(default_factory=list)
     answer: Any = None
     answered: bool = False
+    reason: AskReason = AskReason.DECISION
+    ambiguity: float = 0.0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -117,6 +139,7 @@ class Question:
             "gain": round(self.gain, 4), "stake": self.stake,
             "value": round(self.value, 4), "threshold": self.threshold,
             "must_ask": self.must_ask, "rationale": self.rationale,
+            "reason": self.reason.value, "ambiguity": round(self.ambiguity, 4),
             "answered": self.answered,
         }
 
@@ -128,6 +151,9 @@ class Stop(str, Enum):
     NOT_WORTH_ASKING = "not_worth_asking"  # the marginal rule failed
     BACKSTOP = "question_cap"              # MAX_QUESTIONS hit — investigate
     NO_ANSWERS = "no_answers"              # the customer stopped answering
+    UNRESOLVED_AMBIGUITY = "unresolved_ambiguity"   # A_i > A_max at the cap
+    GATE_1_FAILED = "gate_1_failed"        # admissible spec, inadmissible request
+    NEEDS_PROBE = "needs_probe"            # the device slots dominate; §7
 
 
 @dataclass
@@ -147,6 +173,14 @@ class Interview:
     stopped_because: Stop = Stop.NOT_WORTH_ASKING
     tier: Tier = Tier.COMMERCIAL
     oracle_stats: dict[str, int] = field(default_factory=dict)
+    #: §5 — slots the description read two ways and nobody resolved. Emitted
+    #: explicitly alongside a partial spec; FORGE never guesses to complete.
+    unresolved_ambiguities: list[str] = field(default_factory=list)
+    #: §7 — a probe token, emitted INSTEAD of a question when the device slots
+    #: dominate. One round trip collapses four of them; asking cannot.
+    probe_request: dict[str, Any] | None = None
+    #: §5 condition 4 — Gate 1 must pass before a spec is emitted.
+    gate1: Any = None
 
     @property
     def questions_asked(self) -> int:
@@ -163,7 +197,21 @@ class Interview:
 
     @property
     def complete(self) -> bool:
-        return self.spec is not None
+        """§5: all four conditions, not just a spec that type-checks."""
+        return (
+            self.spec is not None
+            and not self.unresolved_ambiguities
+            and (self.gate1 is None or self.gate1.passed)
+        )
+
+    @property
+    def needs_answers(self) -> bool:
+        """The other half of forge's return type (§1)."""
+        return not self.complete
+
+    @property
+    def needs_probe(self) -> bool:
+        return self.probe_request is not None
 
     def report(self) -> dict[str, Any]:
         return {
@@ -181,6 +229,10 @@ class Interview:
             "probed": list(self.probed),
             "spec_hash": self.spec.hash if self.spec else None,
             "oracle": dict(self.oracle_stats),
+            "unresolved_ambiguities": list(self.unresolved_ambiguities),
+            "probe_request": dict(self.probe_request) if self.probe_request else None,
+            "gate1_passed": self.gate1.passed if self.gate1 is not None else None,
+            "complete": self.complete,
         }
 
 
@@ -204,6 +256,9 @@ class Interviewer:
         k: int = DEFAULT_K,
         max_questions: int = MAX_QUESTIONS,
         max_values: int = 3,
+        max_ambiguity: float = MAX_AMBIGUITY,
+        marginal: bool = True,
+        samples: int = 12,
         planner: Callable[..., Any] | None = None,
     ) -> None:
         self.forge = forge or Forge()
@@ -212,6 +267,9 @@ class Interviewer:
         self.k = k
         self.max_questions = max_questions
         self.max_values = max_values
+        self.max_ambiguity = max_ambiguity
+        self.marginal = marginal
+        self.samples = samples
         self.oracle = PlanOracle(catalog=catalog, planner=planner)
 
     # -- §8 step 1: parse K times ------------------------------------------ #
@@ -283,9 +341,14 @@ class Interviewer:
         scored = {
             g.slot: g for g in rank(
                 [s.spec_field for s in candidates], posterior, builder, self.oracle,
-                max_values=self.max_values,
+                max_values=self.max_values, marginal=self.marginal,
+                samples=self.samples,
             )
         }
+
+        def ambiguity(slot: slot_table.Slot) -> float:
+            entry = posterior.get(slot.spec_field)
+            return entry.effective_ambiguity if entry is not None else 0.0
 
         asked: list[Question] = []
         skipped: list[InfoGain] = []
@@ -294,12 +357,29 @@ class Interviewer:
         # should have answered the questions that mattered most.
         for s in sorted(must, key=lambda s: -scored[s.spec_field].gain):
             g = scored[s.spec_field]
-            asked.append(_question(s, g, lam, self.gamma, must_ask=True))
+            asked.append(_question(s, g, lam, self.gamma, must_ask=True,
+                                   reason=AskReason.REQUIRED, ambiguity=ambiguity(s)))
 
-        for s in sorted(optional, key=lambda s: -scored[s.spec_field].gain * scored[s.spec_field].stake):
+        # §8 lines 8-9 union THREE reasons to ask, and they are different
+        # criteria. A slot can be decision-relevant without being ambiguous, and
+        # ambiguous without being decision-relevant — and an ambiguous slot must
+        # be asked either way, because the alternative is picking one reading of
+        # a sentence that supports two.
+        for s in sorted(optional, key=lambda s: (-scored[s.spec_field].gain
+                                                 * scored[s.spec_field].stake)):
             g = scored[s.spec_field]
-            if worth_asking(g.gain, stake=g.stake, tier=self.tier, gamma=self.gamma):
-                asked.append(_question(s, g, lam, self.gamma))
+            amb = ambiguity(s)
+            contested = amb > self.max_ambiguity or (
+                s.ask is AskPolicy.IF_AMBIGUOUS and _is_ambiguous(posterior, s)
+            )
+            relevant = worth_asking(g.gain, stake=g.stake, tier=self.tier,
+                                    gamma=self.gamma)
+            if contested:
+                asked.append(_question(s, g, lam, self.gamma,
+                                       reason=AskReason.AMBIGUOUS, ambiguity=amb))
+            elif relevant and s.ask is not AskPolicy.IF_AMBIGUOUS:
+                asked.append(_question(s, g, lam, self.gamma,
+                                       reason=AskReason.DECISION, ambiguity=amb))
             else:
                 skipped.append(g)
 
@@ -307,6 +387,8 @@ class Interviewer:
         if optional and all(not scored[s.spec_field].decision_relevant for s in optional):
             # Nothing left that we do not know can move the plan.
             stop = Stop.PLAN_INVARIANT
+        if any(q.reason is AskReason.AMBIGUOUS for q in asked):
+            stop = Stop.UNRESOLVED_AMBIGUITY
         if len(asked) > limit:
             asked, stop = asked[:limit], Stop.BACKSTOP
         return asked, skipped, stop
@@ -350,12 +432,22 @@ class Interviewer:
         if pending and not answers:
             stop = Stop.NO_ANSWERS
 
+        unresolved = sorted(
+            name for name, entry in posterior.slots.items()
+            if entry.effective_ambiguity > self.max_ambiguity
+            and known.get(name) is None
+        )
+        probe_request = self.probe_token(known, posterior)
+        if probe_request is not None and not pending:
+            stop = Stop.NEEDS_PROBE
+
         interview = Interview(
             description=description, posterior=posterior,
             state=self.forge.parse(description, **_parser_known(known)),
             asked=asked, pending=pending, skipped=skipped, derived=derived,
             probed=probed, stopped_because=stop, tier=self.tier,
             oracle_stats=dict(self.oracle.stats),
+            unresolved_ambiguities=unresolved, probe_request=probe_request,
         )
 
         try:
@@ -366,10 +458,65 @@ class Interviewer:
             logger.info("forge: no spec yet — %s", exc)
             return interview
 
+        # §5 condition 4: a spec that type-checks is not yet admissible.
+        interview.gate1 = self.check_gate1(interview.spec)
+        if interview.gate1 is not None and not interview.gate1.passed:
+            # A Gate 1 refusal is FORGE's to explain, not the Planner's (§11):
+            # it is remediable by the user, and the interview must say so.
+            stop = Stop.GATE_1_FAILED
+            interview.stopped_because = stop
+            logger.info("forge: gate 1 refused %s", interview.spec.hash[:8])
+            return interview
+        if unresolved:
+            interview.stopped_because = Stop.UNRESOLVED_AMBIGUITY
+
         if plan_it and interview.spec is not None:
             interview.outcome = self.oracle(interview.spec)
             interview.oracle_stats = dict(self.oracle.stats)
         return interview
+
+    # -- §5 condition 4 and §7's probe token -------------------------------- #
+    @staticmethod
+    def check_gate1(spec: SpecIR) -> Any:
+        """Gate 1: is this request admissible at all?
+
+        §11 splits the two refusals by whose fault they are. A Gate 1 failure —
+        seed floor, data rights, unsupported primitive — is **remediable by the
+        user**, so FORGE owns explaining it. A Gate 2 failure is about physics
+        and budget, and belongs to the Planner.
+        """
+        try:
+            from modelrig.gates import gate1_spec_admissibility
+
+            return gate1_spec_admissibility(spec)
+        except Exception as exc:  # noqa: BLE001 - never let the gate break the interview
+            logger.warning("forge: gate 1 could not be evaluated: %s", exc)
+            return None
+
+    def probe_token(
+        self, known: dict[str, Any], posterior: ParsePosterior
+    ) -> dict[str, Any] | None:
+        """§7: emit a PROBE token instead of a question, when one is warranted.
+
+        Never ask a non-technical user for RAM. The probe collapses the whole
+        device group from a posterior to a point mass in one round trip, and
+        costs zero questions — so while the device is unprobed it is strictly the
+        highest-value next action, and it is not an interview turn.
+        """
+        if _is_measured(known.get("profile_source")):
+            return None
+        return {
+            "token": f"probe:{posterior.description[:40]!r}",
+            "collapses": list(slot_table.PROBED),
+            "measures": ["ram_free", "bw_eff", "flops_eff", "thermal_derate",
+                         "simd", "storage_free"],
+            "costs_questions": 0,
+            "why": (
+                "these slots are physical, so they are measured rather than "
+                "asked; one round trip settles the whole group and licenses a "
+                "latency promise the analytical bound cannot make"
+            ),
+        }
 
     # -- internals ---------------------------------------------------------- #
     def _spec_builder(
@@ -423,8 +570,14 @@ class Interviewer:
         return self._spec_builder(base, description)
 
 
+def _is_ambiguous(posterior: ParsePosterior, slot: slot_table.Slot) -> bool:
+    entry = posterior.get(slot.spec_field)
+    return entry is not None and entry.is_ambiguous
+
+
 def _question(slot: slot_table.Slot, gain: InfoGain, lam: float, gamma: float,
-              *, must_ask: bool = False) -> Question:
+              *, must_ask: bool = False, reason: AskReason = AskReason.DECISION,
+              ambiguity: float = 0.0) -> Question:
     if must_ask and not gain.decision_relevant:
         # Not a contradiction: the slot's value shows up after the plan rather
         # than in it, so the marginal rule cannot see it. A build with no agreed
@@ -436,10 +589,17 @@ def _question(slot: slot_table.Slot, gain: InfoGain, lam: float, gamma: float,
         )
     else:
         rationale = gain.reason()
+    if reason is AskReason.AMBIGUOUS:
+        rationale = (
+            f"the description supports more than one reading here (A={ambiguity:.2f}) "
+            "— resolving it is worth a question whatever the plan says, because the "
+            "alternative is silently picking one"
+        )
     return Question(
         slot=slot.spec_field or slot.name, text=slot.question, gain=gain.gain,
         stake=gain.stake, value=gain.gain * gain.stake * lam, threshold=gamma,
         must_ask=must_ask, rationale=rationale, candidates=list(gain.values_tried),
+        reason=reason, ambiguity=ambiguity,
     )
 
 
