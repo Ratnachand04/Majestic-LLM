@@ -50,7 +50,7 @@ FORGE -> Spec IR -> [GATE 1] -> PLANNER -> Build Plan IR -> [GATE 2]
 | 1 | **FORGE** | slot-filling interview that asks four questions, not forty — and picks them by pushing candidate answers through the **Planner** and keeping the ones that move the plan ([detail](docs/forge.md)) |
 | 2 | **PLANNER** | seven hard predicates over an enumerable plan space; returns a plan **or a refusal with a witness**. Deterministic — no LLM on the common path ([detail](docs/planner.md)) |
 | 3 | **DATA FACTORY** | augmentation before synthesis — for extraction the labels already exist; generation stops at saturation ([detail](docs/data-factory.md)) |
-| 4 | **TRAINER** | LoRA/QLoRA by default; parallel candidates where the plan is uncertain |
+| 4 | **TRAINER** | LoRA/QLoRA; makes **no decisions** — every choice arrives in the plan, so all of them are auditable ([detail](docs/trainer.md)) |
 | 5 | **PROVING GROUND** | seven axes all run, **four block**; the gate tests the confidence bound, not the point estimate ([detail](docs/proving-ground.md)) |
 | 6 | **REGISTRY** | content-addressed cartridges; base stored once, adapters are deltas; per-customer cache isolation and fleet recall ([detail](docs/registry.md)) |
 | 7 | **FABRIC** | typed DAG, statically verified for offline closure, RAM, latency and **channel capacity** — and it runs ([detail](docs/fabric.md)) |
@@ -134,6 +134,14 @@ stage    : gate1  (no planning, no data, no GPU)
 - **Merging happens in BF16, never into the 4-bit training base.** There are two
   separate quantisations in the pipeline and conflating them loses most of the
   fine-tune while every step reports success.
+- **The chat template is asserted, not assumed.** Data formatted with a different
+  template than the base expects trains cleanly, saves cleanly, evaluates
+  cleanly — and is quietly wrong. It is the most common silent failure in
+  fine-tuning, so it raises before a GPU is touched.
+- **An extraction build costs under a dollar.** Training is $0.10–$8 depending on
+  whether the data came from augmentation or synthesis, not the "$5–40" quoted
+  earlier; combined with augmentation removing teacher inference entirely, a
+  labelled-seed extraction build totals ~$0.47.
 - **Refusal is a return value, not an exception** — with a minimal witness and
   ordered remedies. Even a *free* build is refused below θ\* = (C+κ)/(V+κ),
   because the damage of shipping a bad model is not the compute you burned.
@@ -1165,6 +1173,7 @@ majestic-llm/
 │   ├── cachekey.py                two hashes; the cache cannot leak between customers
 │   ├── economics.py · corpus.py   dedup/margin arithmetic; the append-only corpus
 │   ├── stats.py                    intervals, power, McNemar — every customer number
+│   ├── trainer.py · preflight.py  training arithmetic; the assertions before any GPU
 │   ├── feasibility.py              KV-cache-aware device predictor
 │   ├── resources.py                the seven resource dimensions, as pure functions
 │   ├── probe.py                    two-point calibration; the verification ladder
