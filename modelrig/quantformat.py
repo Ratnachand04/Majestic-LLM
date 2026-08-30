@@ -227,3 +227,67 @@ def sweep_plan(simd: Sequence[str], accelerator: str = "cpu") -> dict[str, Any]:
         ),
         "current_evidence": "hypothesis",
     }
+
+
+# =========================================================================== #
+# The accelerator decides the container, not the device's name (§10)
+# =========================================================================== #
+#: Which runtime container each accelerator can actually load. Ordered by
+#: maturity on that accelerator, best first.
+#
+# The distinction that makes this worth a table: the *quantiser* is chosen from
+# the SIMD flags (above) and the *container* is chosen from the accelerator.
+# They are different questions with different answers, and collapsing them is
+# how a plan ends up shipping GGUF to an NPU that cannot load it.
+_TARGETS_BY_ACCELERATOR: dict[str, tuple[str, ...]] = {
+    "cpu": ("gguf", "onnx", "executorch"),
+    "gpu": ("onnx", "gguf", "vllm"),
+    "npu": ("executorch", "coreml", "onnx"),
+    "ane": ("coreml", "executorch"),
+}
+
+#: Containers that need a server process and therefore cannot run offline
+#: on-device. Kept explicit so the offline filter is a lookup, not a guess.
+_SERVER_ONLY_TARGETS = frozenset({"vllm"})
+
+
+def target_formats_for(
+    accelerator: str = "cpu", *, offline: bool = False,
+    allowed: Iterable[str] | None = None,
+) -> list[str]:
+    """Runtime containers this accelerator can load, best-supported first.
+
+    §10 lists ``accelerator -> target format`` as one of six plan coordinates the
+    device decides. Selecting it from the device's *name* — ``android_*`` implies
+    GGUF — is the guess the probe exists to replace: two devices in the same
+    class can differ in whether an NPU delegate is usable at all.
+    """
+    pool = _TARGETS_BY_ACCELERATOR.get(accelerator.lower())
+    if pool is None:
+        # An accelerator nobody has mapped is not a licence to invent one. Fall
+        # back to the CPU containers, which every target can load.
+        logger.warning(
+            "quantformat: accelerator %r is not in the target table; falling back to "
+            "CPU containers, which is conservative rather than correct", accelerator,
+        )
+        pool = _TARGETS_BY_ACCELERATOR["cpu"]
+    if offline:
+        pool = tuple(t for t in pool if t not in _SERVER_ONLY_TARGETS)
+    if allowed is not None:
+        keep = set(allowed)
+        pool = tuple(t for t in pool if t in keep)
+    return list(pool)
+
+
+def target_for(
+    accelerator: str = "cpu", *, offline: bool = False,
+    allowed: Iterable[str] | None = None,
+) -> str:
+    """The single best container for this accelerator."""
+    options = target_formats_for(accelerator, offline=offline, allowed=allowed)
+    if not options:
+        raise ValueError(
+            f"no runtime container is loadable on accelerator {accelerator!r}"
+            + (" under an offline requirement" if offline else "")
+        )
+    return options[0]
