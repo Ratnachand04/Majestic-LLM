@@ -52,7 +52,7 @@ FORGE -> Spec IR -> [GATE 1] -> PLANNER -> Build Plan IR -> [GATE 2]
 | 3 | **DATA FACTORY** | seed-anchored amplification behind blocking QA gates; refuses below the real-seed floor |
 | 4 | **TRAINER** | LoRA/QLoRA by default; parallel candidates where the plan is uncertain |
 | 5 | **PROVING GROUND** | seven axes, all must pass; re-run in full after quantisation |
-| 6 | **REGISTRY** | content-addressed cartridges; base stored once, adapters are deltas |
+| 6 | **REGISTRY** | content-addressed cartridges; base stored once, adapters are deltas; per-customer cache isolation and fleet recall ([detail](docs/registry.md)) |
 | 7 | **FABRIC** | typed DAG, statically verified for offline closure, RAM and cost — and it runs |
 
 **Every gate is checked before any GPU is spent.** A refusal in eight seconds is
@@ -83,6 +83,11 @@ stage    : gate1  (no planning, no data, no GPU)
   rather than unlikely.
 - **Untrusted content cannot reach a privileged tool** — proven statically, then
   enforced again at runtime.
+- **The build cache cannot serve one customer another's model.** Two independent
+  barriers: `data.seed_ref` is in the cache key, so identical requirements over
+  different confidential corpora never collide; and a cross-owner hit on private
+  data is refused at retrieval even if one somehow does. Only public-domain
+  corpora are shareable.
 - **A latency promise is never made from unmeasured hardware.** Effective
   throughput runs at 30–60% of peak; a planner that interpolates it is
   fabricating a commitment, so `P_lat` refuses unless the estimate is explicitly
@@ -1126,7 +1131,9 @@ majestic-llm/
 │   ├── candidates.py               parallel builds → score both → pick one
 │   ├── data_factory.py · proving_ground.py   amplification + the seven axes
 │   ├── quantisation.py · grammar.py   calibration, flip rate, constrained decoding
-│   ├── cartridge.py · registry.py  content-addressed artefacts + lineage
+│   ├── cartridge.py · registry.py  content-addressed artefacts + lineage + recall
+│   ├── cachekey.py                two hashes; the cache cannot leak between customers
+│   ├── economics.py · corpus.py   dedup/margin arithmetic; the append-only corpus
 │   ├── feasibility.py              KV-cache-aware device predictor
 │   ├── resources.py                the seven resource dimensions, as pure functions
 │   ├── probe.py                    two-point calibration; the verification ladder
