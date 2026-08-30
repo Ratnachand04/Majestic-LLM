@@ -11,9 +11,9 @@ the "one flexible model" framing has no answer and this one does.
 | LLVM / TVM | Majestic | What the role does |
 |---|---|---|
 | C, Rust, Swift source | plain-language description | human intent enters |
-| parser and lowering | **FORGE** ([`modelrig/forge.py`](../modelrig/forge.py)) | intent becomes a typed artefact |
+| parser and lowering | **FORGE** ([`modelrig/forge/`](../modelrig/forge/)) | intent becomes a typed artefact |
 | intermediate representation | **Spec IR** ([`modelrig/ir.py`](../modelrig/ir.py)) | the single contract everything binds to |
-| optimisation passes | **PLANNER** ([`modelrig/planner.py`](../modelrig/planner.py)) | choices under hard constraints |
+| optimisation passes | **PLANNER** ([`modelrig/planner/`](../modelrig/planner/)) | choices under hard constraints |
 | back ends (x86, ARM, WASM) | targets: GGUF, ExecuTorch, CoreML, ONNX, vLLM | one plan, many deployment shapes |
 | object file | **cartridge** ([`modelrig/cartridge.py`](../modelrig/cartridge.py)) | the shippable, versioned artefact |
 | test suite | **PROVING GROUND** ([`modelrig/proving_ground.py`](../modelrig/proving_ground.py)) | proof the artefact does what was asked |
@@ -39,6 +39,7 @@ documented separately in [device-verification.md](device-verification.md):
 | Weight compilation | `modelrig/weights.py` | hash pinning, BF16 merge, merged-vs-separate |
 | Quantisation format | `modelrig/quantformat.py` | SIMD flags select the format, not just the bit width |
 | Compounding device model | `modelrig/devicedb.py` | accumulated probes replace the device lab |
+| Per-device certification | `modelrig/certification.py` | the on-device eval subset; certified per device AND per artefact kind ([detail](device-verification.md)) |
 | Seven resource dimensions | `modelrig/resources.py` | memory, storage, latency, compute, thermal, energy, network — six probed, one budget elicited, none guessed ([detail](forge.md)) |
 
 End to end: [`modelrig/pipeline.py`](../modelrig/pipeline.py).
