@@ -284,10 +284,12 @@ def test_the_plan_signature_keeps_the_detail_the_customer_can_see():
 # §4 — every question costs attrition
 # =========================================================================== #
 def test_completion_decays_exponentially_in_the_question_count():
+    """§4 pins gamma by three stated points, so assert the curve through them."""
     assert completion_probability(0) == 1.0
     assert completion_probability(4) == pytest.approx(math.exp(-4 * ATTRITION_GAMMA))
-    assert completion_probability(4) > 0.6      # four questions mostly complete
-    assert completion_probability(40) < 0.01    # forty never do
+    assert completion_probability(4) == pytest.approx(0.82, abs=0.01)
+    assert completion_probability(10) == pytest.approx(0.61, abs=0.01)
+    assert completion_probability(20) == pytest.approx(0.37, abs=0.01)
 
 
 def test_lambda_rises_with_trust_damage():
@@ -301,7 +303,7 @@ def test_lambda_rises_with_trust_damage():
 def test_a_regulated_build_asks_questions_an_experimental_one_will_not():
     """The coupling worth having: raising kappa raises theta* AND lambda, so the
     system refuses more and asks more. Both are caution, moving together."""
-    marginal = 0.05
+    marginal = 0.02
     assert worth_asking(marginal, tier=Tier.REGULATED) is True
     assert worth_asking(marginal, tier=Tier.COMMERCIAL) is False
     assert worth_asking(marginal, tier=Tier.EXPERIMENTAL) is False
@@ -315,7 +317,7 @@ def test_a_zero_gain_slot_is_never_worth_asking_at_any_tier():
 def test_the_stake_multiplier_enters_the_rule():
     """An answer that only swaps one feasible base for another is worth a
     fraction of one that decides whether there is a model at all."""
-    gain = 0.15
+    gain = 0.06
     assert worth_asking(gain, stake=1.0, tier=Tier.COMMERCIAL) is True
     assert worth_asking(gain, stake=0.25, tier=Tier.COMMERCIAL) is False
 
