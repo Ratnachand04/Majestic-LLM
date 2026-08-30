@@ -328,6 +328,85 @@ def check_elicitation_conformance() -> ConformanceReport:
 
 
 # --------------------------------------------------------------------------- #
+def check_fabric_conformance() -> ConformanceReport:
+    """Assert Part 6's analysis rules.
+
+    The first two are the ones that would fail silently. A cartridge quietly
+    becoming a sanitiser would make every graph verify, and a threshold standing
+    in for graph rewriting would make every offline claim unprovable — while
+    both still returned green.
+    """
+    import math
+
+    from majestic.fabric.capacity import (
+        UNBOUNDED_BITS,
+        analyse_capacity,
+        bits_for_schema,
+    )
+    from majestic.fabric.graph import FabricGraph, Node, NodeKind, TaintRole
+    from majestic.fabric.schedule import belady, lru
+
+    report = ConformanceReport()
+
+    # §10: a cartridge propagates. Treating a model as a sanitiser because it
+    # "wrote its own summary" defeats the entire analysis.
+    report.checks_run += 1
+    plain = Node("c", NodeKind.CARTRIDGE)
+    if plain.role is not TaintRole.PROPAGATE or plain.capacity_bits != UNBOUNDED_BITS:
+        report.add(check="cartridge_propagates", subject="Node.role", source="P6-10",
+                   detail=("an unconstrained cartridge must propagate taint at "
+                           "unbounded capacity; a model given injected instructions "
+                           "emits attacker-chosen content"))
+
+    # §12: one free-text field opens the channel. This is the asymmetry the
+    # whole result rests on.
+    report.checks_run += 1
+    enum_only = {"priority": ["urgent", "normal", "low"]}
+    if bits_for_schema(enum_only) >= UNBOUNDED_BITS or \
+            bits_for_schema({**enum_only, "notes": "string"}) != UNBOUNDED_BITS:
+        report.add(check="free_text_opens_the_channel", subject="bits_for_schema",
+                   source="P6-12",
+                   detail=("a constrained schema must have finite capacity and one "
+                           "unconstrained field must make it unbounded"))
+
+    # §11: c_max = 0 must reproduce binary taint exactly, or the quantitative
+    # analysis is not a generalisation of the strict rule but a weakening of it.
+    report.checks_run += 1
+    g = FabricGraph(name="conformance")
+    g.add(Node("src", NodeKind.TOOL, produces_untrusted=True))
+    g.add(Node("mid", NodeKind.CARTRIDGE, output_domain_bits=math.log2(5)))
+    g.add(Node("sink", NodeKind.TOOL, privileged=True))
+    g.connect("src", "mid")
+    g.connect("mid", "sink")
+    if analyse_capacity(g, c_max=0.0).safe or not analyse_capacity(g, c_max=3.0).safe:
+        report.add(check="c_max_zero_is_binary_taint", subject="analyse_capacity",
+                   source="P6-11",
+                   detail=("c_max=0 must refuse a 2.3-bit channel and c_max=3 must "
+                           "admit it; otherwise the threshold is not a "
+                           "generalisation of the strict rule"))
+
+    # §10: a confirm node clears taint, or there is no way to build a graph that
+    # touches untrusted content and still acts.
+    report.checks_run += 1
+    if Node("h", NodeKind.CONFIRM).role is not TaintRole.CLEAR:
+        report.add(check="confirm_clears", subject="NodeKind.CONFIRM", source="P6-10",
+                   detail="a human approval node must clear taint")
+
+    # §15: Belady is optimal for the offline problem, so it must never lose to
+    # an online policy. A regression here means the scheduler stopped being MIN.
+    report.checks_run += 1
+    sigma = ["a", "b", "c", "a", "d", "a", "b", "c"]
+    for capacity in (1, 2, 3):
+        if belady(sigma, capacity).swaps > lru(sigma, capacity).swaps:
+            report.add(check="belady_optimal", subject=f"capacity={capacity}",
+                       source="P6-15",
+                       detail=("Belady's MIN is optimal for offline paging and must "
+                               "never take more swaps than LRU"))
+
+    return report
+
+
+# --------------------------------------------------------------------------- #
 def check_registry_conformance() -> ConformanceReport:
     """Assert Part 5's storage and privacy rules.
 
@@ -563,11 +642,13 @@ def run_all(catalogue: Catalogue | None = None) -> ConformanceReport:
     device = check_device_verification_conformance()
     planner = check_planner_conformance()
     registry = check_registry_conformance()
+    fabric = check_fabric_conformance()
     merged = ConformanceReport(
         findings=(compat.findings + arch.findings + forge.findings + device.findings
-                  + planner.findings + registry.findings),
+                  + planner.findings + registry.findings + fabric.findings),
         checks_run=(compat.checks_run + arch.checks_run + forge.checks_run
-                    + device.checks_run + planner.checks_run + registry.checks_run),
+                    + device.checks_run + planner.checks_run + registry.checks_run
+                    + fabric.checks_run),
     )
     logger.info(
         "conformance: %d checks, %d errors, %d warnings",
