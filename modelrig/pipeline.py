@@ -247,9 +247,13 @@ class MajesticCompiler:
             logger.warning("compile: refused at Gate 1 — %s", result.refusal)
             return result
 
-        # --- cache: an identical spec hash skips the build entirely ------ #
+        # --- cache: an identical ARTEFACT hash skips the build entirely --- #
+        # Part 5 §7-§8. Keyed on h_cache, which excludes owner and budget so the
+        # hit rate is not zero, and includes seed_data_ref so two customers with
+        # identical requirements and different confidential corpora cannot
+        # collide. `lookup` applies the owner check on top of that.
         if use_cache:
-            cached = self.registry.by_spec_hash(spec.hash)
+            cached = self.registry.lookup(spec)
             if cached is not None:
                 result.admitted = True
                 result.cache_hit = True
@@ -381,7 +385,10 @@ class MajesticCompiler:
             artefact, spec, plan, adapter_bytes=winner.compression.get("comp_bytes", 0)
         )
         result.cartridge = cartridge
-        result.cartridge_id = self.registry.admit(cartridge)
+        # The spec travels with the cartridge so the registry can record who
+        # owns it and whether its corpus is shareable. Without it the entry is
+        # admitted but never served from the cache — the safe default.
+        result.cartridge_id = self.registry.admit(cartridge, spec=spec)
         result.admitted = True
         self.planner.record_outcome(spec, plan, passed=True)
         logger.info(
