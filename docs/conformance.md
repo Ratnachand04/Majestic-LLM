@@ -21,7 +21,7 @@ device verdict, which is the number the product sells.
 | SmolLM2-360M | 32 | 5 | 64 | 0.36B | smollm | ✅ |
 | Llama-3.2-1B | 16 | 8 | 64 | 1.24B | llama | ✅ |
 
-**Result: 110 checks, 0 errors, 2 warnings.**
+**Result: 120 checks, 0 errors, 2 warnings.**
 
 The two warnings are real and worth keeping visible: there is no teacher in the
 `llama` or `smollm` tokenizer families, so bases from those families can only use
@@ -126,6 +126,11 @@ failure names the diagram it came from.
 | N_eff counts modes, not rows | P8-07 | `conformance` check |
 | Amplification reduces the seed floor without eliminating it | P8-20 | `conformance` check |
 | The collapse citation sits at the flywheel, not the factory | P8-19 | `conformance` check |
+| The ~30 MB adapter stays attributable to r=16 on 1.7B | P9-02 | `conformance` check |
+| QLoRA stays an order-of-magnitude memory reduction | P9-06 | `conformance` check |
+| Token normalisation differs from microbatch averaging | P9-08 | `conformance` check |
+| Hedge and sweep stay separate | P9-12 | `conformance` check |
+| Contamination and template assertions still raise | P9-18 | `conformance` check |
 
 The κ row is the one worth watching. `θ*` and `Λ` are computed from the
 same `(V, κ)` pair by different formulas, and there is no structural reason they
