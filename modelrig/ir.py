@@ -131,6 +131,10 @@ class SpecIR:
     budget_ceiling_usd: float = 40.0
     jurisdiction: str = "IN"
     max_step_depth: int = 1
+    #: Who asked. Part 5 §7-§8: excluded from the *cache* key so two customers
+    #: with identical requirements can share an artefact, and checked at
+    #: retrieval so they can only do so when the corpus is public.
+    owner_id: str = ""
     spec_version: int = 1
     notes: str = ""
 
