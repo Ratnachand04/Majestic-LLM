@@ -17,6 +17,7 @@ renders it as an outcome rather than a failure.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -48,10 +49,22 @@ class BuildOutcome:
     plain_summary: str = ""
     plan: dict[str, Any] = field(default_factory=dict)
     labels: list[str] = field(default_factory=list)
+    #: Real examples the user supplied, minus what was locked away for testing.
+    n_seeds: int = 0
+    #: Rows actually trained on — larger than ``n_seeds`` once the Data Factory
+    #: has amplified. Reporting only one of the two invites the reading that
+    #: amplification did not happen, or that it inflated the evidence; it did
+    #: the first and never the second, and the split is what proves it.
     n_train: int = 0
     n_holdout: int = 0
     questions: list[dict[str, Any]] = field(default_factory=list)
     weights_bytes: int = 0
+    #: Per-stage telemetry, in the order the compiler ran them.
+    stages: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def total_ms(self) -> float:
+        return round(sum(s.get("elapsed_ms", 0.0) for s in self.stages), 1)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -65,10 +78,13 @@ class BuildOutcome:
             "plain_summary": self.plain_summary,
             "plan": self.plan,
             "labels": self.labels,
+            "n_seeds": self.n_seeds,
             "n_train": self.n_train,
             "n_holdout": self.n_holdout,
             "questions": self.questions,
             "weights_bytes": self.weights_bytes,
+            "stages": self.stages,
+            "total_ms": self.total_ms,
         }
 
 
@@ -98,8 +114,13 @@ def build(
     quality_gate: float = 0.80,
     offline: bool = True,
     registry_path: str | Path = REGISTRY_PATH,
+    progress: Any = None,
 ) -> BuildOutcome:
-    """Run one description plus its labelled examples through the compiler."""
+    """Run one description plus its labelled examples through the compiler.
+
+    ``progress`` is forwarded to the compiler and receives a ``StageEvent`` as
+    each stage starts and finishes. Purely observational.
+    """
     from modelrig.forge import Interviewer
     from modelrig.pipeline import MajesticCompiler
 
@@ -147,8 +168,11 @@ def build(
         )
         return outcome
 
-    result = MajesticCompiler(base_path=str(registry_path)).compile(spec, examples)
+    result = MajesticCompiler(base_path=str(registry_path)).compile(
+        spec, examples, progress=progress
+    )
 
+    outcome.stages = [e.as_dict() for e in result.stages]
     outcome.admitted = result.admitted
     outcome.cartridge_id = result.cartridge_id
     outcome.stage_reached = result.stage_reached
@@ -184,7 +208,19 @@ def build(
         # Reading it back is what makes reuse auditable instead of merely fast.
         _hydrate_from_cartridge(outcome, result.cartridge)
 
-    outcome.n_train = len(examples) - outcome.n_holdout
+    # The Data Factory is the authority on the split — it did it. Deriving the
+    # training count from the input size instead would report the seed count
+    # under a heading that means "rows trained on", and quietly contradict the
+    # factory's own telemetry.
+    data_stage = next(
+        (s for s in outcome.stages if s["stage"] == "data" and s["status"] == "ok"), None,
+    )
+    if data_stage is not None:
+        outcome.n_train = int(data_stage["data"].get("n_train", 0))
+        outcome.n_holdout = int(data_stage["data"].get("n_holdout", outcome.n_holdout))
+    else:
+        outcome.n_train = len(examples) - outcome.n_holdout
+    outcome.n_seeds = len(examples) - outcome.n_holdout
 
     weights_dir = (
         Path(result.weights_path) if result.weights_path is not None
@@ -206,6 +242,58 @@ _AXIS_FALLBACK_ORDER = (
     "task_metric", "safety", "privacy", "contamination",
     "calibrated_judge", "behavioural", "regression", "calibration",
 )
+
+
+def build_stream(
+    description: str,
+    examples: list[tuple[str, str]],
+    *,
+    quality_gate: float = 0.80,
+    offline: bool = True,
+    registry_path: str | Path = REGISTRY_PATH,
+) -> Iterator[dict[str, Any]]:
+    """The same build, yielded stage by stage as it happens.
+
+    ``build`` runs on a worker thread and pushes events into a queue; this
+    generator drains it. The compile is identical either way — the stream is a
+    window onto it, not a second code path, so the sequence a viewer watches is
+    the sequence that actually ran.
+
+    Yields ``{"event": "stage", ...}`` per stage and one final
+    ``{"event": "done", "outcome": ...}``. A crash arrives as
+    ``{"event": "error"}`` rather than a truncated stream, so the page can say
+    what went wrong instead of hanging on a step that will never complete.
+    """
+    import queue
+    import threading
+
+    events: queue.Queue[Any] = queue.Queue()
+    _END = object()
+
+    def run() -> None:
+        try:
+            outcome = build(
+                description, examples, quality_gate=quality_gate, offline=offline,
+                registry_path=registry_path,
+                progress=lambda e: events.put(("stage", e.as_dict())),
+            )
+            events.put(("done", outcome.as_dict()))
+        except Exception as exc:                     # noqa: BLE001
+            logger.exception("studio: streaming build failed")
+            events.put(("error", {"message": f"{type(exc).__name__}: {exc}"}))
+        finally:
+            events.put(_END)
+
+    worker = threading.Thread(target=run, daemon=True, name="majestic-build")
+    worker.start()
+
+    while True:
+        item = events.get()
+        if item is _END:
+            break
+        kind, payload = item
+        yield {"event": kind, **payload}
+    worker.join(timeout=5.0)
 
 
 def _labels_on_disk(weights_dir: Path) -> list[str]:
@@ -367,5 +455,6 @@ def sample_dataset(n: int = 120) -> list[dict[str, str]]:
 
 __all__ = [
     "MIN_SEEDS_HINT", "BuildOutcome",
-    "build", "exe_path", "list_models", "package", "predict", "sample_dataset",
+    "build", "build_stream", "exe_path", "list_models", "package", "predict",
+    "sample_dataset",
 ]
