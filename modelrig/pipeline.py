@@ -75,6 +75,9 @@ class CompileResult:
     selection: Optional[Selection] = None
     repair_attempts: int = 0
     quantisation: Optional[dict[str, Any]] = None
+    #: Where the trained weights were written. The cartridge manifest is the
+    #: certificate; this is the thing the certificate is about.
+    weights_path: Optional[Path] = None
     #: True only when the SPEC asked for parallel candidates. §15: they raise
     #: expected cost, so they are never enabled on the customer's behalf.
     parallel_candidates: bool = False
@@ -187,6 +190,11 @@ class MajesticCompiler:
             params_b=base.params_b if base else 0.0,
             compression=compression,
             quantisation=quant_outcome.__dict__,
+            # The quantised model, not the pre-quantisation reference: what is
+            # certified is what ships. Keeping the reference here instead would
+            # mean the scorecard describes one artefact and the customer gets
+            # another.
+            model=quantised,
         )
 
     def _repair_plans(
@@ -389,6 +397,17 @@ class MajesticCompiler:
         # owns it and whether its corpus is shareable. Without it the entry is
         # admitted but never served from the cache — the safe default.
         result.cartridge_id = self.registry.admit(cartridge, spec=spec)
+
+        # --- the weights themselves ---------------------------------------- #
+        # A certificate that points at no weights is not a deliverable. The
+        # winning model is written beside its manifest, under the cartridge id,
+        # so `load_cartridge_model` can serve it and the packager can ship it.
+        if winner.model is not None:
+            weights_dir = Path(self.registry.base_path) / "weights" / result.cartridge_id
+            classifier.save_model(winner.model, weights_dir)
+            result.weights_path = weights_dir
+            logger.info("compile: wrote weights to %s", weights_dir)
+
         result.admitted = True
         self.planner.record_outcome(spec, plan, passed=True)
         logger.info(
@@ -396,3 +415,32 @@ class MajesticCompiler:
             result.cartridge_id[:8], selection.rationale,
         )
         return result
+
+
+# =========================================================================== #
+# Serving a built cartridge
+# =========================================================================== #
+def load_cartridge_model(cartridge_id: str, registry_path: str | Path = "./registry"):
+    """Load the trained weights for an admitted cartridge.
+
+    The registry stores two things per build and they answer different
+    questions: the manifest says *what was certified and on what evidence*, and
+    the weights are *the artefact that certificate describes*. Serving needs
+    both — a manifest alone cannot predict anything.
+    """
+    weights_dir = Path(registry_path) / "weights" / cartridge_id
+    if not weights_dir.is_dir():
+        raise FileNotFoundError(
+            f"no weights for cartridge {cartridge_id!r} at {weights_dir}. The "
+            "manifest may have been admitted by an older build that discarded "
+            "the model — rebuild it to produce a servable artefact"
+        )
+    return classifier.load_model(weights_dir)
+
+
+def predict_with_cartridge(
+    cartridge_id: str, texts: list[str], registry_path: str | Path = "./registry"
+) -> list[str]:
+    """Run inference through a built cartridge. The end of the whole pipeline."""
+    model = load_cartridge_model(cartridge_id, registry_path)
+    return classifier.predict(model, list(texts))
