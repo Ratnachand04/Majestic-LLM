@@ -107,6 +107,25 @@ def _probe_profile() -> dict[str, Any]:
     ).to_dict()
 
 
+def _corpus_ref(examples: list[tuple[str, str]]) -> str:
+    """Identify the uploaded corpus by its content.
+
+    ``seed_data_ref`` is in the cache key on purpose — Part 5 §8, "on WHOSE
+    data. Never remove this." — so that two requests with identical
+    requirements and different corpora cannot collide. A constant here defeats
+    that completely: a spam filter and a sentiment classifier are described the
+    same way, so the second build would be served the first one's cartridge and
+    would answer "positive" to "win a free prize click now".
+
+    Hashed in the given order, not as a set. The split depends on order, so two
+    orderings are two different artefacts and must not share an entry. Nothing
+    from the corpus itself is exposed — only a digest of it.
+    """
+    from modelrig.ir import content_hash
+
+    return "studio://corpus/" + content_hash([list(pair) for pair in examples])
+
+
 def build(
     description: str,
     examples: list[tuple[str, str]],
@@ -149,7 +168,7 @@ def build(
             "quality_gate": quality_gate,
             "seed_data_count": len(examples),
             "offline_required": offline,
-            "seed_data_ref": "studio://uploaded",
+            "seed_data_ref": _corpus_ref(examples),
             "latency_budget_ms": 30_000,
             "expected_input_tokens": 120,
             "io_schema": {"label": "str"},
