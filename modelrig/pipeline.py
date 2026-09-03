@@ -20,7 +20,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from majestic.logging_utils import get_logger
 from modelrig import classifier
@@ -56,6 +56,91 @@ def _ms_since(started: float) -> float:
     return round((time.perf_counter() - started) * 1000.0, 3)
 
 
+#: The compiler's stages, in the order they run, with the subsystem each one
+#: belongs to. Published so a caller can render the sequence before the first
+#: event arrives instead of growing the list as results trickle in.
+#: Labels name what each stage actually does, which is not always what its key
+#: suggests: the Proving Ground runs per candidate inside ``_train_and_score``,
+#: so "train" covers fit, quantise AND score, and "prove" is the selection and
+#: repair loop that consumes those scorecards. A timing display that put the
+#: certification cost under the wrong heading would be worse than none.
+STAGES: tuple[tuple[str, str], ...] = (
+    ("gate1", "FORGE · spec admissibility"),
+    ("cache", "REGISTRY · cache lookup"),
+    ("gate2", "PLANNER · plan feasibility"),
+    ("data", "DATA FACTORY · amplify & split"),
+    ("train", "TRAINER · fit · quantise · score"),
+    ("prove", "PROVING GROUND · select & repair"),
+    ("gate3", "GATE 3 · artefact certification"),
+    ("registry", "REGISTRY · admit & persist"),
+)
+
+
+@dataclass
+class StageEvent:
+    """One stage of one compilation, as it happened.
+
+    ``elapsed_ms`` is measured, never estimated. A progress display that
+    invents its own pacing is decoration; one that reports what the compiler
+    actually spent is evidence, and evidence is what this system sells.
+    """
+
+    stage: str
+    status: str                      # running | ok | refused | skipped
+    detail: str = ""
+    elapsed_ms: float = 0.0
+    data: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def label(self) -> str:
+        return dict(STAGES).get(self.stage, self.stage)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "stage": self.stage, "label": self.label, "status": self.status,
+            "detail": self.detail, "elapsed_ms": self.elapsed_ms, "data": self.data,
+        }
+
+
+ProgressFn = Callable[[StageEvent], None]
+
+
+class _Telemetry:
+    """Times each stage and forwards it to an optional listener.
+
+    A listener that raises must not take the build down with it: the caller is
+    a UI, and a compile that succeeded is still a success even if nobody was
+    watching by the end.
+    """
+
+    def __init__(self, on_event: Optional[ProgressFn] = None) -> None:
+        self._on_event = on_event
+        self._started: dict[str, float] = {}
+        self.events: list[StageEvent] = []
+
+    def _emit(self, event: StageEvent) -> None:
+        self.events.append(event)
+        if self._on_event is None:
+            return
+        try:
+            self._on_event(event)
+        except Exception as exc:                     # noqa: BLE001
+            logger.warning("compile: progress listener failed: %s", exc)
+
+    def start(self, stage: str, detail: str = "") -> None:
+        self._started[stage] = time.perf_counter()
+        self._emit(StageEvent(stage, "running", detail))
+
+    def done(
+        self, stage: str, status: str = "ok", detail: str = "", **data: Any
+    ) -> None:
+        started = self._started.pop(stage, None)
+        self._emit(StageEvent(
+            stage, status, detail,
+            _ms_since(started) if started is not None else 0.0, data,
+        ))
+
+
 @dataclass
 class CompileResult:
     """Everything one compilation produced — including an honest refusal."""
@@ -81,6 +166,10 @@ class CompileResult:
     #: True only when the SPEC asked for parallel candidates. §15: they raise
     #: expected cost, so they are never enabled on the customer's behalf.
     parallel_candidates: bool = False
+    #: What each stage cost, in the order it ran. Recorded whether or not
+    #: anyone was listening, so a refusal can be read backwards to see how far
+    #: the build got and what it spent getting there.
+    stages: list[StageEvent] = field(default_factory=list)
 
     @property
     def refused(self) -> bool:
@@ -243,23 +332,35 @@ class MajesticCompiler:
         *,
         use_cache: bool = True,
         allow_repair: bool = True,
+        progress: Optional[ProgressFn] = None,
     ) -> CompileResult:
-        """Run the full flow for one specification."""
+        """Run the full flow for one specification.
+
+        ``progress`` receives a :class:`StageEvent` as each stage begins and
+        ends. It is observation only: the compile's behaviour, its result, and
+        its refusals are identical whether or not anyone is listening.
+        """
         result = CompileResult(spec=spec)
+        tel = _Telemetry(progress)
+        result.stages = tel.events
 
         # --- Gate 1: may we attempt this at all? ------------------------ #
+        tel.start("gate1", f"checking {spec.task_primitive.value} spec {spec.hash[:8]}")
         gate1 = gate1_spec_admissibility(spec, self.profiler, self.catalogue)
         result.gates.append(gate1)
         if not gate1.passed:
             result.refusal = "; ".join(gate1.reasons)
+            tel.done("gate1", "refused", result.refusal)
             logger.warning("compile: refused at Gate 1 — %s", result.refusal)
             return result
+        tel.done("gate1", detail="spec is admissible")
 
         # --- cache: an identical ARTEFACT hash skips the build entirely --- #
         # Part 5 §7-§8. Keyed on h_cache, which excludes owner and budget so the
         # hit rate is not zero, and includes seed_data_ref so two customers with
         # identical requirements and different confidential corpora cannot
         # collide. `lookup` applies the owner check on top of that.
+        tel.start("cache", "looking for an identical artefact")
         if use_cache:
             cached = self.registry.lookup(spec)
             if cached is not None:
@@ -268,26 +369,49 @@ class MajesticCompiler:
                 result.cartridge = cached
                 result.cartridge_id = cached.id
                 result.stage_reached = "cache"
+                tel.done("cache", detail=f"hit — {cached.id[:12]} already certified",
+                         cartridge_id=cached.id)
                 return result
+            tel.done("cache", detail="miss — building")
+        else:
+            tel.done("cache", "skipped", "cache bypassed")
 
         # --- PLANNER + Gate 2 -------------------------------------------- #
         result.stage_reached = "gate2"
+        tel.start("gate2", "searching the feasible region")
         planning: PlanningResult = self.planner.plan(spec)
         result.gates.append(planning.gate)
         if not planning.admitted or planning.plan is None:
             result.refusal = "; ".join(planning.gate.reasons)
+            tel.done("gate2", "refused", result.refusal)
             logger.warning("compile: refused at Gate 2 — %s", result.refusal)
             return result
         result.plan = planning.plan
+        tel.done(
+            "gate2",
+            detail=f"{planning.plan.base_ref} · {planning.plan.bit_width} · "
+                   f"{planning.plan.target}",
+            base_ref=planning.plan.base_ref, bit_width=planning.plan.bit_width,
+            target=planning.plan.target, peft=planning.plan.peft_method,
+        )
 
         # --- DATA FACTORY ------------------------------------------------- #
         result.stage_reached = "data"
+        tel.start("data", f"{len(corpus)} seed examples")
         try:
             bundle = self.data_factory.build(corpus, spec.task_primitive)
         except DataRefusal as exc:
             result.refusal = str(exc)
+            tel.done("data", "refused", str(exc))
             logger.warning("compile: refused by the data factory — %s", exc)
             return result
+        tel.done(
+            "data",
+            detail=f"{len(bundle.train)} train / {len(bundle.held_out)} held out · "
+                   f"{len(bundle.labels)} labels",
+            n_train=len(bundle.train), n_holdout=len(bundle.held_out),
+            labels=list(bundle.labels),
+        )
 
         # --- TRAIN. Candidates are OPT-IN ONLY (§15) ---------------------- #
         # Running k candidates is strictly worse in expected cost at every pass
@@ -299,12 +423,18 @@ class MajesticCompiler:
         plans = [p for p in plans if self._admissible(spec, p)] or [planning.plan]
         result.parallel_candidates = len(plans) > 1
 
+        tel.start("train", f"{len(plans)} candidate plan(s)")
         selection = select(
             build_candidates(plans, lambda p: self._train_and_score(spec, p, bundle)),
             spec, self.catalogue,
         )
         result.selection = selection
+        tel.done(
+            "train", detail=selection.rationale or f"{len(plans)} candidate(s) trained",
+            candidates=selection.comparison_table(),
+        )
         result.stage_reached = "prove"
+        tel.start("prove", "scoring against held-out data")
 
         # --- REPAIR LOOP: mutate the plan on gate failure and rebuild ------ #
         attempts = 0
@@ -335,6 +465,7 @@ class MajesticCompiler:
 
         if not selection.chosen or selection.winner is None:
             result.refusal = selection.rationale
+            tel.done("prove", "refused", result.refusal)
             self.planner.record_outcome(spec, result.plan, passed=False)
             logger.warning("compile: no candidate cleared the gate — %s", result.refusal)
             return result
@@ -345,9 +476,22 @@ class MajesticCompiler:
         card = winner.scorecard
         result.scorecard = card
         result.quantisation = winner.quantisation
+        tel.done(
+            "prove", detail=card.plain_summary(),
+            status_label=card.status.value,
+            axes=[
+                {"name": a.name, "score": round(a.score, 4),
+                 "threshold": round(a.threshold, 4),
+                 "passed": a.passed, "blocking": a.blocking}
+                for a in card.axes
+            ],
+            n_held_out=card.n_held_out,
+            repair_attempts=attempts,
+        )
 
         # --- Gate 3: artefact certification -------------------------------- #
         result.stage_reached = "gate3"
+        tel.start("gate3", "licence chain, provenance, evidence")
         base = self.catalogue.base(plan.base_ref)
         teacher = self.catalogue.teacher(plan.teacher_ref) if plan.teacher_ref else None
         chain = resolve_licence_chain(
@@ -383,12 +527,19 @@ class MajesticCompiler:
             result.refusal = "; ".join(gate3.reasons)
             if allow_repair and card.failure_report is not None:
                 result.repair_suggestions = self.repairer.repair(card.failure_report)
+            tel.done("gate3", "refused", result.refusal)
             self.planner.record_outcome(spec, plan, passed=False)
             logger.warning("compile: refused at Gate 3 — %s", result.refusal)
             return result
+        tel.done(
+            "gate3",
+            detail=f"licence {chain.resolved_licence.value if chain.resolved_licence else 'unresolved'}"
+                   f" · {len(chain.obligations)} obligation(s) · evidence attached",
+        )
 
         # --- CARTRIDGE + REGISTRY ------------------------------------------ #
         result.stage_reached = "registry"
+        tel.start("registry", "writing the cartridge and its weights")
         cartridge = cartridge_from_artefact(
             artefact, spec, plan, adapter_bytes=winner.compression.get("comp_bytes", 0)
         )
@@ -402,13 +553,20 @@ class MajesticCompiler:
         # A certificate that points at no weights is not a deliverable. The
         # winning model is written beside its manifest, under the cartridge id,
         # so `load_cartridge_model` can serve it and the packager can ship it.
+        weight_bytes = 0
         if winner.model is not None:
             weights_dir = Path(self.registry.base_path) / "weights" / result.cartridge_id
             classifier.save_model(winner.model, weights_dir)
             result.weights_path = weights_dir
+            weight_bytes = sum(f.stat().st_size for f in weights_dir.iterdir())
             logger.info("compile: wrote weights to %s", weights_dir)
 
         result.admitted = True
+        tel.done(
+            "registry",
+            detail=f"cartridge {result.cartridge_id[:12]} · {weight_bytes:,} bytes of weights",
+            cartridge_id=result.cartridge_id, weight_bytes=weight_bytes,
+        )
         self.planner.record_outcome(spec, plan, passed=True)
         logger.info(
             "compile: admitted cartridge %s (%s)",
