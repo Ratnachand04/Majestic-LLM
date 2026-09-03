@@ -206,13 +206,22 @@ class Scorecard:
             "certifiable_claim": self.certifiable_claim(),
             "power": self.power(),
             "plain_summary": self.plain_summary(),
+            # The threshold travels with the score. A certificate that records a
+            # pass but not the bar that was cleared cannot be re-read later —
+            # and a cached cartridge is read far more often than it is built.
             "axes": {
                 a.name: {
-                    "score": a.score, "passed": a.passed, "blocking": a.blocking,
+                    "score": a.score, "threshold": a.threshold,
+                    "passed": a.passed, "blocking": a.blocking,
                     "interval": a.interval.as_dict() if a.interval else None,
                 }
                 for a in self.axes
             },
+            # Keyed dicts are stored with sorted keys, so evaluation order is
+            # lost on the way to disk. Recorded here rather than reconstructed
+            # by a reader, which would be a second copy of this list free to
+            # drift from the one above.
+            "axis_order": [a.name for a in self.axes],
         }
         if task is not None and task.interval is not None:
             report["interval"] = task.interval.as_dict()
