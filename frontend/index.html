@@ -3,255 +3,507 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Majestic LLM — Model Studio</title>
+  <title>MAJESTIC — Mission Control</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0a0c11;
-      --panel: #12151d;
-      --panel2: #171b25;
-      --border: #242938;
-      --text: #e8eaf0;
-      --muted: #8b93a7;
-      --accent: #6ea8fe;
-      --ok: #4ade80;
-      --warn: #fbbf24;
-      --bad: #f87171;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --void:    #04060c;
+      --deep:    #070b14;
+      --panel:   rgba(11,17,29,0.78);
+      --panel2:  rgba(17,25,41,0.72);
+      --edge:    rgba(88,190,255,0.16);
+      --edge-hi: rgba(88,190,255,0.45);
+      --text:    #dde6f2;
+      --muted:   #7a8ba6;
+      --dim:     #4c5b73;
+      --cyan:    #4dd8ff;
+      --amber:   #ffb444;
+      --go:      #4ade80;
+      --nogo:    #ff5f56;
+      --violet:  #a78bfa;
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
-      margin: 0; background: var(--bg); color: var(--text);
-      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0; background: var(--void); color: var(--text);
+      font: 15px/1.55 var(--sans); overflow-x: hidden;
     }
-    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
-    header { padding: 26px 0 14px; border-bottom: 1px solid var(--border); }
-    .brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-    h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
-    .tag { color: var(--muted); font-size: 13px; }
-    .status {
-      display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
-      font-family: var(--mono); padding: 3px 10px; border-radius: 99px;
-      border: 1px solid var(--border); margin-left: auto;
-    }
-    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-    .status.up .dot { background: var(--ok); }
-    .status.down .dot { background: var(--bad); }
 
-    .steps { display: flex; gap: 0; margin: 18px 0 0; flex-wrap: wrap; }
-    .step {
-      font-size: 12px; font-family: var(--mono); color: var(--muted);
-      padding: 6px 14px 6px 0; display: flex; align-items: center; gap: 8px;
+    /* ---- the sky ------------------------------------------------------- */
+    #stars { position: fixed; inset: 0; z-index: 0; display: block; }
+    .horizon {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      background:
+        radial-gradient(1100px 620px at 50% -10%, rgba(77,216,255,0.13), transparent 62%),
+        radial-gradient(760px 460px at 88% 108%, rgba(167,139,250,0.11), transparent 60%),
+        radial-gradient(520px 300px at 4% 82%, rgba(255,180,68,0.06), transparent 60%);
     }
-    .step .n {
-      width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border);
-      display: grid; place-items: center; font-size: 11px;
+    .scanlines {
+      position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0.32;
+      background: repeating-linear-gradient(
+        180deg, transparent 0 2px, rgba(120,190,255,0.035) 2px 3px);
     }
-    .step.done { color: var(--ok); }
-    .step.done .n { border-color: var(--ok); }
-    .step.active { color: var(--accent); }
-    .step.active .n { border-color: var(--accent); }
+    .wrap { position: relative; z-index: 3; max-width: 1180px; margin: 0 auto; padding: 0 26px; }
 
-    main { padding: 22px 0 70px; display: grid; gap: 16px; }
+    /* ---- header -------------------------------------------------------- */
+    header { padding: 30px 0 20px; }
+    .topline { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .sigil {
+      width: 34px; height: 34px; flex: 0 0 34px; position: relative;
+    }
+    .sigil svg { width: 100%; height: 100%; display: block; }
+    .sigil .ring { transform-origin: 50% 50%; animation: slowspin 18s linear infinite; }
+    h1 {
+      font-size: 21px; margin: 0; letter-spacing: 0.22em; font-weight: 600;
+      font-family: var(--mono);
+    }
+    .subtitle {
+      color: var(--muted); font-size: 12px; letter-spacing: 0.16em;
+      text-transform: uppercase; font-family: var(--mono);
+    }
+    .sysbar {
+      margin-left: auto; display: flex; align-items: center; gap: 18px;
+      font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em;
+    }
+    .readout { color: var(--muted); }
+    .readout b { color: var(--cyan); font-weight: 600; }
+    .link {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 11px;
+      font-family: var(--mono); padding: 4px 11px; border-radius: 3px;
+      border: 1px solid var(--edge); color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .link.up  { color: var(--go);   border-color: rgba(74,222,128,0.4); }
+    .link.down{ color: var(--nogo); border-color: rgba(255,95,86,0.4); }
+    .beacon {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+      box-shadow: 0 0 0 0 currentColor; animation: ping 2.4s ease-out infinite;
+    }
+
+    /* ---- panels -------------------------------------------------------- */
+    main { padding: 8px 0 80px; display: grid; gap: 18px; }
     .panel {
-      background: var(--panel); border: 1px solid var(--border);
-      border-radius: 12px; padding: 18px 20px;
+      position: relative; background: var(--panel); border: 1px solid var(--edge);
+      border-radius: 4px; padding: 22px 24px; backdrop-filter: blur(9px);
     }
-    .panel h2 {
-      font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em;
-      color: var(--muted); margin: 0 0 14px; display: flex;
-      align-items: center; justify-content: space-between; gap: 12px;
+    /* instrument-bezel corner brackets */
+    .panel::before, .panel::after {
+      content: ""; position: absolute; width: 13px; height: 13px;
+      border: 1px solid var(--edge-hi); pointer-events: none;
     }
-    label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
-    textarea, select, input[type=number], input[type=text] {
-      width: 100%; background: var(--panel2); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text); padding: 10px 12px; font: inherit;
-      resize: vertical;
+    .panel::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+    .panel::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+    .panel.locked { opacity: 0.38; filter: saturate(0.25); }
+    .panel.armed  { animation: arm 0.55s ease-out; }
+
+    .phead {
+      display: flex; align-items: center; gap: 12px; margin: 0 0 18px;
+      font-size: 11.5px; font-family: var(--mono); letter-spacing: 0.17em;
+      text-transform: uppercase; color: var(--muted); font-weight: 500;
     }
-    textarea { min-height: 76px; }
-    textarea.data { min-height: 130px; font-family: var(--mono); font-size: 12.5px; }
-    .row { display: flex; gap: 12px; align-items: flex-end; margin-top: 12px; flex-wrap: wrap; }
-    .row > * { flex: 1; min-width: 140px; }
-    .row .narrow { flex: 0 0 130px; }
-    .row .auto { flex: 0 0 auto; min-width: 0; }
+    .phead .idx {
+      color: var(--void); background: var(--cyan); padding: 2px 7px;
+      border-radius: 2px; font-weight: 700; letter-spacing: 0.08em;
+    }
+    .phead .rule { flex: 1; height: 1px; background: var(--edge); }
+    .phead .aux { color: var(--dim); letter-spacing: 0.1em; }
+
+    label {
+      display: block; font-size: 10.5px; color: var(--muted); margin: 0 0 7px;
+      font-family: var(--mono); letter-spacing: 0.13em; text-transform: uppercase;
+    }
+    textarea, input {
+      width: 100%; background: rgba(4,8,16,0.66); border: 1px solid var(--edge);
+      border-radius: 3px; color: var(--text); padding: 11px 13px;
+      font: 13.5px/1.5 var(--sans); resize: vertical; transition: border-color 0.18s;
+    }
+    textarea:focus, input:focus {
+      outline: none; border-color: var(--edge-hi);
+      box-shadow: 0 0 0 1px rgba(77,216,255,0.18), 0 0 22px rgba(77,216,255,0.09) inset;
+    }
+    textarea { min-height: 74px; }
+    textarea.corpus { min-height: 128px; font-family: var(--mono); font-size: 12px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .controls { display: flex; gap: 14px; align-items: flex-end; margin-top: 16px; flex-wrap: wrap; }
+    .controls .spacer { flex: 1; }
 
     button {
-      background: var(--accent); color: #08101f; border: none; border-radius: 8px;
-      padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer;
-      white-space: nowrap;
+      position: relative; background: transparent; color: var(--cyan);
+      border: 1px solid var(--edge-hi); border-radius: 3px; padding: 10px 20px;
+      font: 600 12px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+      cursor: pointer; overflow: hidden; transition: color 0.18s, border-color 0.18s;
     }
-    button.ghost {
-      background: transparent; color: var(--text); border: 1px solid var(--border);
-      font-weight: 500;
+    button::after {
+      content: ""; position: absolute; inset: 0; background: var(--cyan);
+      opacity: 0.09; transform: translateX(-101%); transition: transform 0.3s ease;
     }
-    button:disabled { opacity: 0.45; cursor: default; }
-    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:hover:not(:disabled)::after { transform: translateX(0); }
+    button:disabled { opacity: 0.38; cursor: default; }
+    button.primary {
+      border-color: var(--cyan); color: #04121c; background: var(--cyan);
+      box-shadow: 0 0 26px rgba(77,216,255,0.24);
+    }
+    button.primary::after { background: #fff; }
+    button.ignite {
+      border-color: var(--amber); color: #150c00; background: var(--amber);
+      box-shadow: 0 0 26px rgba(255,180,68,0.26);
+    }
+    button.ignite::after { background: #fff; }
+    .gostrip { width: 44px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; }
 
-    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .note { font-size: 11.5px; color: var(--dim); margin-top: 11px; font-family: var(--mono); letter-spacing: 0.04em; }
+    .note.warn { color: var(--amber); }
+    .fault {
+      color: var(--nogo); font-size: 12.5px; margin-top: 12px; font-family: var(--mono);
+      border-left: 2px solid var(--nogo); padding-left: 11px;
+    }
     .hidden { display: none !important; }
 
-    .gates { display: grid; gap: 6px; margin-bottom: 14px; }
-    .gate {
-      display: flex; align-items: flex-start; gap: 10px; font-size: 13px;
-      font-family: var(--mono); padding: 7px 10px; border-radius: 7px;
-      background: var(--panel2); border: 1px solid var(--border);
+    /* ---- launch sequence rail ------------------------------------------ */
+    .seq { display: grid; gap: 3px; }
+    .srow {
+      position: relative; display: grid;
+      grid-template-columns: 20px 1fr auto 58px; align-items: center; gap: 14px;
+      padding: 9px 13px; border: 1px solid transparent; border-radius: 3px;
+      font-family: var(--mono); font-size: 12.5px; overflow: hidden;
+      color: var(--dim); transition: color 0.3s, border-color 0.3s, background 0.3s;
     }
-    .gate .mark { font-weight: 700; }
-    .gate.pass .mark { color: var(--ok); }
-    .gate.fail .mark { color: var(--bad); }
-    .gate .reasons { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .srow .led {
+      width: 8px; height: 8px; border-radius: 50%; background: currentColor;
+      opacity: 0.32; justify-self: center;
+    }
+    .srow .what { letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .srow .detail {
+      color: var(--dim); font-size: 11.5px; text-align: right;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46ch;
+    }
+    .srow .ms { text-align: right; font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
 
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .srow.run {
+      color: var(--cyan); border-color: rgba(77,216,255,0.34);
+      background: rgba(77,216,255,0.05);
+    }
+    .srow.run .led { opacity: 1; animation: blink 0.75s steps(2) infinite; }
+    .srow.run::before {                       /* the sweep */
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(100deg, transparent 0%, rgba(77,216,255,0.16) 45%,
+                  rgba(77,216,255,0.30) 50%, rgba(77,216,255,0.16) 55%, transparent 100%);
+      transform: translateX(-100%); animation: sweep 1.15s linear infinite;
+    }
+    .srow.ok { color: var(--go); border-color: rgba(74,222,128,0.2); }
+    .srow.ok .led { opacity: 1; box-shadow: 0 0 9px currentColor; }
+    .srow.ok .ms { color: var(--go); }
+    .srow.refused { color: var(--nogo); border-color: rgba(255,95,86,0.4); background: rgba(255,95,86,0.06); }
+    .srow.refused .led { opacity: 1; box-shadow: 0 0 9px currentColor; }
+    .srow.skipped { color: var(--dim); }
+    .srow.settle { animation: settle 0.42s ease-out; }
+
+    .seqfoot {
+      display: flex; align-items: baseline; gap: 10px; margin-top: 15px;
+      padding-top: 14px; border-top: 1px solid var(--edge); font-family: var(--mono);
+    }
+    .bigms {
+      font-size: 30px; font-weight: 600; color: var(--cyan);
+      font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+      text-shadow: 0 0 24px rgba(77,216,255,0.34);
+    }
+    .seqfoot .unit { color: var(--muted); font-size: 12px; letter-spacing: 0.1em; }
+    .seqfoot .trailing { margin-left: auto; color: var(--dim); font-size: 11px; letter-spacing: 0.1em; }
+
+    /* ---- go / no-go poll ------------------------------------------------ */
+    .poll { display: grid; gap: 5px; }
+    .vote {
+      display: grid; grid-template-columns: 62px 1fr; gap: 15px; align-items: start;
+      padding: 10px 13px; border-radius: 3px; background: var(--panel2);
+      border: 1px solid var(--edge); font-family: var(--mono); font-size: 12.5px;
+      animation: fadein 0.4s ease-out backwards;
+    }
+    .vote .call { font-weight: 700; letter-spacing: 0.1em; }
+    .vote.go .call { color: var(--go); }
+    .vote.nogo .call { color: var(--nogo); }
+    .vote.nogo { border-color: rgba(255,95,86,0.32); }
+    .vote .why { color: var(--muted); font-size: 11.5px; margin-top: 5px; line-height: 1.5; }
+
+    .hold {
+      border: 1px solid rgba(255,95,86,0.4); background: rgba(255,95,86,0.07);
+      border-radius: 3px; padding: 16px 18px; animation: fadein 0.4s ease-out;
+    }
+    .hold .stamp {
+      color: var(--nogo); font-family: var(--mono); font-weight: 700;
+      letter-spacing: 0.2em; font-size: 13px; margin-bottom: 9px;
+    }
+    .hold .body { font-size: 13.5px; color: #ffc9c5; }
+    .hold .why { color: var(--muted); font-size: 12px; margin-top: 11px; font-family: var(--mono); }
+
+    /* ---- instrument panel ----------------------------------------------- */
+    .claim {
+      display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+      background: var(--panel2); border: 1px solid var(--edge); border-radius: 3px;
+      padding: 15px 18px; margin-bottom: 20px;
+    }
+    .claim .big { font-size: 15px; font-weight: 600; flex: 1; min-width: 260px; }
+    .stamp {
+      font-family: var(--mono); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.18em; padding: 5px 13px; border-radius: 2px;
+    }
+    .stamp.certified   { color: var(--go);   border: 1px solid var(--go);   background: rgba(74,222,128,0.1); }
+    .stamp.provisional { color: var(--amber); border: 1px solid var(--amber); background: rgba(255,180,68,0.1); }
+
+    .gauges {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 12px;
+    }
+    .gauge {
+      background: var(--panel2); border: 1px solid var(--edge); border-radius: 3px;
+      padding: 14px 8px 11px; text-align: center; animation: fadein 0.45s ease-out backwards;
+    }
+    .gauge svg { display: block; margin: 0 auto; }
+    .gauge .arc { transition: stroke-dashoffset 1.15s cubic-bezier(0.22,1,0.36,1); }
+    .gauge .val {
+      font-family: var(--mono); font-size: 16px; font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .gauge .axis {
+      font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 7px;
+      letter-spacing: 0.06em; word-break: break-word;
+    }
+    .gauge .role {
+      display: inline-block; margin-top: 6px; font-family: var(--mono); font-size: 8.5px;
+      letter-spacing: 0.13em; padding: 1px 6px; border-radius: 2px;
+    }
+    .role.block { color: var(--amber); border: 1px solid rgba(255,180,68,0.35); }
+    .role.adv   { color: var(--dim);   border: 1px solid var(--edge); }
+
+    /* ---- readout grid ---------------------------------------------------- */
+    .kv {
+      display: grid; grid-template-columns: auto 1fr; gap: 7px 18px;
+      font-family: var(--mono); font-size: 12.5px; margin-top: 16px;
+    }
+    .kv dt { color: var(--muted); letter-spacing: 0.09em; text-transform: uppercase; font-size: 10.5px; padding-top: 2px; }
+    .kv dd { margin: 0; word-break: break-word; }
+    .chip {
+      display: inline-block; padding: 1px 9px; border-radius: 2px;
+      font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.09em;
+    }
+    .chip.ok    { color: var(--go);    background: rgba(74,222,128,0.12); }
+    .chip.bad   { color: var(--nogo);  background: rgba(255,95,86,0.12); }
+    .chip.warn  { color: var(--amber); background: rgba(255,180,68,0.12); }
+    .chip.mute  { color: var(--muted); background: rgba(122,139,166,0.12); }
+    .chip.cyan  { color: var(--cyan);  background: rgba(77,216,255,0.12); }
+
+    /* ---- telemetry / fleet tables ---------------------------------------- */
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-family: var(--mono); }
     th {
-      text-align: left; font-weight: 500; color: var(--muted); font-size: 11px;
-      text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 10px;
-      border-bottom: 1px solid var(--border);
+      text-align: left; font-weight: 500; color: var(--muted); font-size: 10px;
+      letter-spacing: 0.14em; text-transform: uppercase; padding: 8px 11px;
+      border-bottom: 1px solid var(--edge);
     }
-    td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+    td { padding: 10px 11px; border-bottom: 1px solid rgba(88,190,255,0.07); }
     tr:last-child td { border-bottom: none; }
-    .pill {
-      display: inline-block; padding: 1px 8px; border-radius: 99px;
-      font-size: 11px; font-family: var(--mono);
-    }
-    .pill.ok { background: rgba(74,222,128,0.15); color: var(--ok); }
-    .pill.bad { background: rgba(248,113,113,0.15); color: var(--bad); }
-    .pill.warn { background: rgba(251,191,36,0.15); color: var(--warn); }
-    .pill.mute { background: rgba(139,147,167,0.15); color: var(--muted); }
+    tbody tr { animation: fadein 0.4s ease-out backwards; }
+    .scroller { overflow-x: auto; }
 
-    .summary {
-      background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
-      padding: 12px 14px; font-size: 14px; margin-bottom: 14px;
+    .padout {
+      font-family: var(--mono); font-size: 12.5px; background: rgba(4,8,16,0.66);
+      border: 1px solid var(--edge); border-radius: 3px; padding: 15px 17px;
+      white-space: pre-wrap; word-break: break-word; margin: 0; line-height: 1.7;
     }
-    .summary .big { font-size: 15px; font-weight: 600; }
-    .refusal {
-      background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3);
-      color: #fca5a5; border-radius: 8px; padding: 12px 14px; font-size: 13.5px;
-    }
-    .refusal strong { color: var(--bad); }
+    .liftoff { animation: liftoff 1.05s cubic-bezier(0.16,1,0.3,1); }
 
-    pre {
-      background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
-      padding: 12px 14px; font-family: var(--mono); font-size: 12.5px;
-      white-space: pre-wrap; word-break: break-word; margin: 0;
+    footer {
+      color: var(--dim); font-size: 11px; padding: 0 0 40px; font-family: var(--mono);
+      letter-spacing: 0.07em; line-height: 1.9;
     }
-    .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; }
-    .kv dt { color: var(--muted); }
-    .kv dd { margin: 0; font-family: var(--mono); }
+    footer b { color: var(--muted); font-weight: 500; }
 
-    .spinner {
-      display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor;
-      border-right-color: transparent; border-radius: 50%;
-      animation: spin 0.7s linear infinite; vertical-align: -1px; margin-right: 6px;
+    /* ---- motion ---------------------------------------------------------- */
+    @keyframes slowspin { to { transform: rotate(360deg); } }
+    @keyframes ping {
+      0%   { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+      70%  { box-shadow: 0 0 0 7px transparent; opacity: 0.65; }
+      100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .err { color: var(--bad); font-size: 13px; margin-top: 10px; }
-    footer { color: var(--muted); font-size: 12px; padding: 0 0 34px; }
-    code { font-family: var(--mono); font-size: 12px; }
+    @keyframes blink { 50% { opacity: 0.25; } }
+    @keyframes sweep { to { transform: translateX(100%); } }
+    @keyframes settle {
+      0%   { transform: translateX(-5px); opacity: 0.5; }
+      100% { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadein {
+      from { opacity: 0; transform: translateY(7px); }
+      to   { opacity: 1; transform: none; }
+    }
+    @keyframes arm {
+      0%   { opacity: 0.38; transform: scale(0.995); }
+      100% { opacity: 1; transform: none; }
+    }
+    @keyframes liftoff {
+      0%   { transform: translateY(16px); opacity: 0; filter: blur(5px); }
+      100% { transform: none; opacity: 1; filter: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+      #stars { display: none; }
+    }
+    @media (max-width: 760px) {
+      .grid2 { grid-template-columns: 1fr; }
+      .srow { grid-template-columns: 16px 1fr 52px; }
+      .srow .detail { display: none; }
+      .sysbar { width: 100%; margin-left: 0; }
+    }
   </style>
 </head>
 <body>
+  <canvas id="stars"></canvas>
+  <div class="horizon"></div>
+  <div class="scanlines"></div>
+
   <div class="wrap">
     <header>
-      <div class="brand">
-        <h1>Majestic LLM</h1>
-        <span class="tag">a compiler for small specialist models</span>
-        <span id="status" class="status"><span class="dot"></span><span id="statusText">checking…</span></span>
-      </div>
-      <div class="steps">
-        <div class="step active" id="s1"><span class="n">1</span>Describe &amp; train</div>
-        <div class="step" id="s2"><span class="n">2</span>Certify</div>
-        <div class="step" id="s3"><span class="n">3</span>Test live</div>
-        <div class="step" id="s4"><span class="n">4</span>Ship as .exe</div>
+      <div class="topline">
+        <div class="sigil">
+          <svg viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <g class="ring">
+              <circle cx="20" cy="20" r="17" stroke="rgba(77,216,255,0.32)" stroke-width="1"
+                      stroke-dasharray="4 7"/>
+            </g>
+            <circle cx="20" cy="20" r="11" stroke="rgba(77,216,255,0.55)" stroke-width="1"/>
+            <path d="M20 8 L26 27 L20 23 L14 27 Z" fill="#4dd8ff"/>
+          </svg>
+        </div>
+        <div>
+          <h1>MAJESTIC</h1>
+          <div class="subtitle">Model Compiler · Mission Control</div>
+        </div>
+        <div class="sysbar">
+          <span class="readout">MET <b id="clock">T+00:00:00</b></span>
+          <span id="status" class="link"><span class="beacon"></span><span id="statusText">linking…</span></span>
+        </div>
       </div>
     </header>
 
     <main>
-      <!-- 1. BUILD -->
+      <!-- 01 -------------------------------------------------------------- -->
       <section class="panel">
-        <h2>1 · Describe the model you need</h2>
-        <label for="desc">What should it do?</label>
-        <textarea id="desc">Classify incoming support tickets by sentiment on an android phone. Must work offline. Flag anything uncertain.</textarea>
+        <h2 class="phead"><span class="idx">01</span> Mission brief <span class="rule"></span>
+          <span class="aux">what to build, and from what</span></h2>
 
-        <div class="row">
+        <div class="grid2">
           <div>
-            <label for="data">Labelled examples — one per line, as <code>label &lt;tab or comma&gt; text</code></label>
-            <textarea id="data" class="data" placeholder="positive, the staff were wonderful&#10;negative, this service is broken"></textarea>
+            <label for="desc">Objective</label>
+            <textarea id="desc">Classify incoming support tickets by sentiment on an android phone. Must work offline. Flag anything uncertain.</textarea>
+          </div>
+          <div>
+            <label for="data">Payload — labelled examples, <code>label , text</code> per line</label>
+            <textarea id="data" class="corpus" placeholder="positive, the staff were wonderful&#10;negative, this service is broken"></textarea>
           </div>
         </div>
-        <div class="row">
-          <button class="ghost auto" id="loadSample">Load 120 sample tickets</button>
-          <div class="narrow">
+
+        <div class="controls">
+          <button id="loadSample">Load specimen corpus</button>
+          <div style="flex:0 0 130px">
             <label for="gate">Quality gate</label>
             <input type="number" id="gate" value="0.80" min="0.5" max="0.99" step="0.01" />
           </div>
-          <div class="auto"><button id="buildBtn">Build model</button></div>
+          <div class="spacer"></div>
+          <button class="primary" id="buildBtn">▲ &nbsp;Initiate build</button>
         </div>
-        <div class="hint" id="dataHint">No examples loaded. The classify seed floor is 80 real examples — below that the Data Factory refuses rather than amplifying.</div>
-        <div class="err hidden" id="buildErr"></div>
+        <div class="note" id="dataHint"></div>
+        <div class="fault hidden" id="buildErr"></div>
       </section>
 
-      <!-- 2. RESULT -->
-      <section class="panel hidden" id="resultPanel">
-        <h2>2 · What the compiler decided</h2>
-        <div id="refusalBox" class="refusal hidden"></div>
+      <!-- 02 -------------------------------------------------------------- -->
+      <section class="panel locked" id="seqPanel">
+        <h2 class="phead"><span class="idx">02</span> Launch sequence <span class="rule"></span>
+          <span class="aux">measured, not estimated</span></h2>
+        <div class="seq" id="seq"></div>
+        <div class="seqfoot">
+          <span class="bigms" id="totalMs">0.0</span><span class="unit">MS TOTAL</span>
+          <span class="trailing" id="seqNote">standing by</span>
+        </div>
+      </section>
+
+      <!-- 03 -------------------------------------------------------------- -->
+      <section class="panel locked" id="resultPanel">
+        <h2 class="phead"><span class="idx">03</span> Go / no-go poll <span class="rule"></span>
+          <span class="aux">every gate clears before the next stage spends anything</span></h2>
+        <div id="refusalBox" class="hold hidden"></div>
+        <div class="poll" id="gates"></div>
         <div id="admittedBox" class="hidden">
-          <div class="summary">
-            <div class="big" id="plainSummary"></div>
-            <div style="margin-top:8px" class="kv" id="planKv"></div>
-          </div>
+          <dl class="kv" id="planKv"></dl>
         </div>
-        <div class="gates" id="gates"></div>
-        <div id="axesWrap" class="hidden">
-          <table>
-            <thead><tr><th>Proving Ground axis</th><th>Score</th><th>Gate</th><th></th><th>Role</th></tr></thead>
-            <tbody id="axes"></tbody>
-          </table>
-        </div>
-        <div class="hint" id="questionsHint"></div>
+        <div class="note" id="pollIdle">AWAITING BUILD · three gates, each checked before
+          the next stage spends anything. A refusal in eight seconds beats a failed build in ninety minutes.</div>
+        <div class="note" id="questionsHint"></div>
       </section>
 
-      <!-- 3. TEST -->
-      <section class="panel hidden" id="testPanel">
-        <h2>3 · Try the model you just built</h2>
-        <label for="testText">One input per line</label>
+      <!-- 04 -------------------------------------------------------------- -->
+      <section class="panel locked" id="instrumentPanel">
+        <h2 class="phead"><span class="idx">04</span> Instrument panel <span class="rule"></span>
+          <span class="aux">the proving ground, all seven axes</span></h2>
+        <div class="claim hidden" id="claimBox">
+          <div class="big" id="plainSummary"></div>
+          <span class="stamp" id="statusStamp"></span>
+        </div>
+        <div class="gauges" id="axes"></div>
+        <div class="note" id="axesNote">AWAITING BUILD · the tick on each dial is the bar that
+          axis has to clear. Amber axes block admission; grey axes advise — seven blocking gates
+          would ship only a fraction of the models that are actually good enough.</div>
+      </section>
+
+      <!-- 05 -------------------------------------------------------------- -->
+      <section class="panel locked" id="testPanel">
+        <h2 class="phead"><span class="idx">05</span> Live fire <span class="rule"></span>
+          <span class="aux">inference through the artefact you just built</span></h2>
+        <label for="testText">Input — one per line</label>
         <textarea id="testText">the team resolved it quickly, very happy
 this was a broken and frustrating experience
 excellent and helpful support
 far too slow, never fixed</textarea>
-        <div class="row">
-          <div class="auto"><button id="predictBtn">Run inference</button></div>
+        <div class="controls">
+          <div class="spacer"></div>
+          <button id="predictBtn">Run inference</button>
         </div>
-        <div id="predWrap" class="hidden" style="margin-top:14px">
+        <div id="predWrap" class="hidden scroller" style="margin-top:16px">
           <table>
-            <thead><tr><th style="width:110px">Prediction</th><th>Input</th></tr></thead>
+            <thead><tr><th style="width:110px">Output</th><th>Input</th></tr></thead>
             <tbody id="preds"></tbody>
           </table>
         </div>
-        <div class="err hidden" id="predErr"></div>
+        <div class="fault hidden" id="predErr"></div>
       </section>
 
-      <!-- 4. SHIP -->
-      <section class="panel hidden" id="shipPanel">
-        <h2>4 · Ship it as a standalone .exe</h2>
-        <p class="hint" style="margin-top:0">
-          Freezes the certified model into a single Windows executable — no Python,
-          no downloads, runs offline on any machine. The weights are only a couple of
-          kilobytes; the binary is mostly the Python runtime.
-        </p>
-        <div class="row">
-          <div class="auto"><button id="packBtn">Build .exe</button></div>
-          <div class="auto"><button class="ghost hidden" id="dlBtn">Download</button></div>
+      <!-- 06 -------------------------------------------------------------- -->
+      <section class="panel locked" id="shipPanel">
+        <h2 class="phead"><span class="idx">06</span> Launch <span class="rule"></span>
+          <span class="aux">freeze the certified model into a standalone binary</span></h2>
+        <div class="note" style="margin-top:0;margin-bottom:14px">
+          No Python, no downloads, no network on the target machine. The weights are
+          a couple of kilobytes — the binary is mostly the frozen runtime.
         </div>
-        <div id="packOut" class="hidden" style="margin-top:14px"></div>
-        <div class="err hidden" id="packErr"></div>
+        <div class="controls">
+          <div class="spacer"></div>
+          <button class="ignite" id="packBtn">▲ &nbsp;Build .exe</button>
+          <button class="hidden" id="dlBtn">↓ Download</button>
+        </div>
+        <div id="packOut" class="hidden" style="margin-top:16px"></div>
+        <div class="fault hidden" id="packErr"></div>
       </section>
 
-      <!-- MODELS -->
+      <!-- fleet ------------------------------------------------------------ -->
       <section class="panel">
-        <h2>Built models <button class="ghost auto" id="refreshModels" style="padding:4px 10px;font-size:12px">Refresh</button></h2>
-        <div id="modelsWrap">
+        <h2 class="phead"><span class="idx">✦</span> Fleet <span class="rule"></span>
+          <button id="refreshModels" style="padding:5px 12px;font-size:10px">Refresh</button></h2>
+        <div class="scroller">
           <table>
-            <thead><tr><th>Cartridge</th><th>Task</th><th>Base</th><th>Certified</th><th>Servable</th><th>Packaged</th></tr></thead>
+            <thead><tr>
+              <th>Cartridge</th><th>Task</th><th>Base</th>
+              <th>Certified</th><th>Servable</th><th>Packaged</th>
+            </tr></thead>
             <tbody id="models"></tbody>
           </table>
         </div>
@@ -259,39 +511,137 @@ far too slow, never fixed</textarea>
     </main>
 
     <footer>
-      FastAPI over the ModelRig compiler. Endpoints:
-      <code>/api/build</code> · <code>/api/predict</code> · <code>/api/package</code> ·
-      <code>/api/models</code> · <code>/docs</code>
+      <b>FORGE</b> → Spec IR → <b>GATE 1</b> → <b>PLANNER</b> → Build Plan IR → <b>GATE 2</b> →
+      <b>DATA FACTORY</b> → <b>TRAINER</b> → <b>PROVING GROUND</b> → <b>GATE 3</b> → Cartridge → <b>REGISTRY</b><br>
+      /api/build/stream · /api/predict · /api/package · /api/models · /docs
     </footer>
   </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
 let CURRENT = null;
+const T0 = Date.now();
 
-function setStep(n) {
-  [1,2,3,4].forEach((i) => {
-    const el = $('s' + i);
-    el.classList.remove('done', 'active');
-    if (i < n) el.classList.add('done');
-    else if (i === n) el.classList.add('active');
-  });
+/* ===================== starfield ========================================= */
+(function starfield() {
+  const cv = $('stars');
+  if (!cv || typeof cv.getContext !== 'function' || typeof requestAnimationFrame !== 'function') return;
+  const ctx = cv.getContext('2d');
+  let w = 0, h = 0, stars = [];
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = cv.width = Math.floor(innerWidth * dpr);
+    h = cv.height = Math.floor(innerHeight * dpr);
+    cv.style.width = innerWidth + 'px';
+    cv.style.height = innerHeight + 'px';
+    // Density by area, so a wide monitor does not end up with a sparse sky.
+    const n = Math.min(320, Math.round((innerWidth * innerHeight) / 7200));
+    stars = Array.from({ length: n }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      z: Math.random() * 0.85 + 0.15,          // depth: drives size, speed, alpha
+      p: Math.random() * Math.PI * 2,           // twinkle phase
+    }));
+  }
+
+  let t = 0;
+  function frame() {
+    t += 0.016;
+    ctx.clearRect(0, 0, w, h);
+    for (const s of stars) {
+      s.y += s.z * 0.16;                        // slow parallax drift
+      if (s.y > h) { s.y = 0; s.x = Math.random() * w; }
+      const a = (0.25 + s.z * 0.55) * (0.68 + 0.32 * Math.sin(t * 1.5 + s.p));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.z * 1.25, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(190,225,255,${a.toFixed(3)})`;
+      ctx.fill();
+    }
+    requestAnimationFrame(frame);
+  }
+  addEventListener('resize', resize);
+  resize();
+  frame();
+})();
+
+/* ===================== mission clock ===================================== */
+(function clock() {
+  const el = $('clock');
+  if (!el || typeof setInterval !== 'function') return;
+  const pad = (n) => String(n).padStart(2, '0');
+  setInterval(() => {
+    const s = Math.floor((Date.now() - T0) / 1000);
+    el.textContent = `T+${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`;
+  }, 1000);
+})();
+
+/* ===================== small helpers ===================================== */
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
 
+/** Count a number up to its value. Falls back to setting it directly where
+ *  rAF is unavailable — which is also exactly what reduced motion wants. */
+function countTo(el, value, decimals = 1) {
+  const end = Number(value) || 0;
+  if (typeof requestAnimationFrame !== 'function') { el.textContent = end.toFixed(decimals); return; }
+  const start = Number(el.textContent.replace(/,/g, '')) || 0;
+  const t0 = performance.now(), dur = 620;
+  (function step(now) {
+    const k = Math.min(1, (now - t0) / dur);
+    const eased = 1 - Math.pow(1 - k, 3);
+    el.textContent = (start + (end - start) * eased).toFixed(decimals);
+    if (k < 1) requestAnimationFrame(step);
+  })(t0);
+}
+
+function unlock(id) {
+  const el = $(id);
+  el.classList.remove('locked');
+  el.classList.add('armed');
+}
+
+/** Lock the downstream panels AND empty them.
+ *
+ *  Dimming alone is not enough: a locked panel still showing the last model's
+ *  gauges puts a 93% next to a build that was refused, and nothing on screen
+ *  says the two belong to different artefacts. Results are cleared with the
+ *  panel that produced them. */
+function relock(...ids) {
+  ids.forEach((id) => $(id).classList.add('locked'));
+  $('axes').innerHTML = '';
+  $('gates').innerHTML = '';
+  $('claimBox').classList.add('hidden');
+  $('plainSummary').textContent = '';
+  $('statusStamp').textContent = '';
+  $('preds').innerHTML = '';
+  $('predWrap').classList.add('hidden');
+  $('packOut').innerHTML = '';
+  $('packOut').classList.add('hidden');
+  $('dlBtn').classList.add('hidden');
+  $('predErr').classList.add('hidden');
+  $('packErr').classList.add('hidden');
+  $('admittedBox').classList.add('hidden');
+  $('refusalBox').classList.add('hidden');
+}
+
+/* ===================== health =========================================== */
 async function checkHealth() {
   const el = $('status'), txt = $('statusText');
   try {
     const r = await fetch('/health');
     if (!r.ok) throw new Error(r.status);
-    const d = await r.json();
+    await r.json();
     el.classList.add('up'); el.classList.remove('down');
-    txt.textContent = 'online — ' + (d.status || 'ok');
+    txt.textContent = 'systems nominal';
   } catch {
     el.classList.add('down'); el.classList.remove('up');
-    txt.textContent = 'unreachable';
+    txt.textContent = 'no link';
   }
 }
 
+/* ===================== corpus =========================================== */
 function parseExamples(raw) {
   const out = [];
   for (const line of raw.split('\n')) {
@@ -301,8 +651,7 @@ function parseExamples(raw) {
     let sep = s.indexOf('\t');
     if (sep < 0) sep = s.indexOf(',');
     if (sep < 0) continue;
-    const label = s.slice(0, sep).trim();
-    const text = s.slice(sep + 1).trim();
+    const label = s.slice(0, sep).trim(), text = s.slice(sep + 1).trim();
     if (label && text) out.push({ label, text });
   }
   return out;
@@ -312,12 +661,14 @@ function updateDataHint() {
   const ex = parseExamples($('data').value);
   const labels = [...new Set(ex.map((e) => e.label))];
   const hint = $('dataHint');
+  hint.classList.remove('warn');
   if (!ex.length) {
-    hint.textContent = 'No examples loaded. The classify seed floor is 80 real examples — below that the Data Factory refuses rather than amplifying.';
+    hint.textContent = 'PAYLOAD EMPTY · the classify seed floor is 80 real examples — below that the Data Factory refuses rather than amplifying.';
     return;
   }
-  const short = ex.length < 80 ? '  ⚠ below the 80-example seed floor — expect a refusal.' : '';
-  hint.textContent = `${ex.length} examples · labels: ${labels.join(', ')}${short}`;
+  if (ex.length < 80) hint.classList.add('warn');
+  hint.textContent = `PAYLOAD ${ex.length} EXAMPLES · ${labels.length} LABELS · ${labels.join(' / ')}`
+    + (ex.length < 80 ? '  ⚠ BELOW THE 80-EXAMPLE SEED FLOOR — EXPECT A HOLD' : '');
 }
 
 $('data').addEventListener('input', updateDataHint);
@@ -333,115 +684,251 @@ $('loadSample').addEventListener('click', async () => {
   } finally { btn.disabled = false; }
 });
 
+/* ===================== the launch sequence =============================== */
+// Mirrors modelrig.pipeline.STAGES. Rendered up front so the sequence reads as
+// a plan being executed, not a list that grows as results happen to arrive.
+const STAGES = [
+  ['gate1',    'FORGE · spec admissibility'],
+  ['cache',    'REGISTRY · cache lookup'],
+  ['gate2',    'PLANNER · plan feasibility'],
+  ['data',     'DATA FACTORY · amplify & split'],
+  ['train',    'TRAINER · fit · quantise · score'],
+  ['prove',    'PROVING GROUND · select & repair'],
+  ['gate3',    'GATE 3 · artefact certification'],
+  ['registry', 'REGISTRY · admit & persist'],
+];
+
+/** Draw the rail in its pending state. Shown at load too: the sequence is a
+ *  plan the compiler executes, so the panel should say what is going to happen
+ *  before it happens, not assemble itself as results trickle in. */
+function resetSequence(running) {
+  $('seq').innerHTML = STAGES.map(([key, label]) => `
+    <div class="srow" id="st-${key}">
+      <span class="led"></span>
+      <span class="what">${esc(label)}</span>
+      <span class="detail"></span>
+      <span class="ms">—</span>
+    </div>`).join('');
+  $('totalMs').textContent = '0.0';
+  $('seqNote').textContent = running ? 'sequence running' : 'standing by';
+  if (running) unlock('seqPanel');
+}
+
+let elapsedTotal = 0;
+function applyStageEvent(ev) {
+  const row = $('st-' + ev.stage);
+  if (!row) return;
+  row.classList.remove('run', 'ok', 'refused', 'skipped', 'settle');
+  if (ev.status === 'running') {
+    row.classList.add('run');
+    row.querySelector('.detail').textContent = ev.detail || '';
+    row.querySelector('.ms').textContent = '···';
+    return;
+  }
+  row.classList.add(ev.status === 'ok' ? 'ok' : ev.status, 'settle');
+  row.querySelector('.detail').textContent = ev.detail || '';
+  row.querySelector('.ms').textContent = ev.elapsed_ms.toFixed(1);
+  elapsedTotal += ev.elapsed_ms;
+  countTo($('totalMs'), elapsedTotal, 1);
+}
+
+/* ===================== build ============================================ */
 $('buildBtn').addEventListener('click', async () => {
   const btn = $('buildBtn'), err = $('buildErr');
   const examples = parseExamples($('data').value);
   err.classList.add('hidden');
 
   if (!examples.length) {
-    err.textContent = 'Add some labelled examples first — or click "Load 120 sample tickets".';
+    err.textContent = 'NO PAYLOAD — add labelled examples, or load the specimen corpus.';
     err.classList.remove('hidden');
     return;
   }
 
+  CURRENT = null;
+  elapsedTotal = 0;
+  relock('resultPanel', 'instrumentPanel', 'testPanel', 'shipPanel');
+  resetSequence(true);
+
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Building…';
+  const restore = btn.innerHTML;
+  btn.innerHTML = '◈ &nbsp;Running…';
+  const body = JSON.stringify({
+    description: $('desc').value,
+    examples,
+    quality_gate: parseFloat($('gate').value) || 0.8,
+    offline: true,
+  });
+
   try {
-    const r = await fetch('/api/build', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        description: $('desc').value,
-        examples,
-        quality_gate: parseFloat($('gate').value) || 0.8,
-        offline: true,
-      }),
+    const r = await fetch('/api/build/stream', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-    renderBuild(await r.json());
+
+    let finished = false;
+    for await (const ev of readSSE(r)) {
+      if (ev.event === 'stage')      applyStageEvent(ev);
+      else if (ev.event === 'done')  { finished = true; renderBuild(ev.outcome ?? ev); }
+      else if (ev.event === 'error') throw new Error(ev.message || 'build failed');
+    }
+    if (!finished) throw new Error('the build stream ended before reporting a result');
   } catch (e) {
+    $('seqNote').textContent = 'sequence aborted';
     err.textContent = e.message || String(e);
     err.classList.remove('hidden');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Build model';
+    btn.innerHTML = restore;
   }
 });
 
-function renderBuild(d) {
-  $('resultPanel').classList.remove('hidden');
-  setStep(2);
+/** Parse a server-sent-event stream out of a fetch response. */
+async function* readSSE(response) {
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    // No streaming here (very old browser, or a proxy that buffered it away).
+    // The payload is still one valid SSE document, so parse it whole.
+    for (const frame of (await response.text()).split('\n\n')) {
+      if (frame.startsWith('data: ')) yield JSON.parse(frame.slice(6));
+    }
+    return;
+  }
+  const reader = response.body.getReader(), dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+      if (frame.startsWith('data: ')) yield JSON.parse(frame.slice(6));
+    }
+  }
+}
 
-  // gates
-  $('gates').innerHTML = (d.gates || []).map((g) => `
-    <div class="gate ${g.passed ? 'pass' : 'fail'}">
-      <span class="mark">${g.passed ? '✓' : '✗'}</span>
-      <span>${g.gate}${g.reasons && g.reasons.length
-        ? `<div class="reasons">${g.reasons.map(esc).join('<br>')}</div>` : ''}</span>
+/* ===================== render the outcome ================================ */
+function renderBuild(d) {
+  unlock('resultPanel');
+  const cached = d.stage_reached === 'cache';
+  $('seqNote').textContent = cached
+    ? 'cache hit — nothing was retrained'
+    : (d.admitted ? 'sequence complete' : 'sequence held');
+  if (d.total_ms) countTo($('totalMs'), d.total_ms, 1);
+
+  // -- go / no-go poll --
+  $('pollIdle').classList.add('hidden');
+  $('gates').innerHTML = (d.gates || []).map((g, i) => `
+    <div class="vote ${g.passed ? 'go' : 'nogo'}" style="animation-delay:${i * 70}ms">
+      <span class="call">${g.passed ? 'GO' : 'NO-GO'}</span>
+      <span>${esc(g.gate)}${g.reasons && g.reasons.length
+        ? `<div class="why">${g.reasons.map(esc).join('<br>')}</div>` : ''}</span>
     </div>`).join('');
 
   if (d.admitted) {
     CURRENT = d.cartridge_id;
     $('refusalBox').classList.add('hidden');
     $('admittedBox').classList.remove('hidden');
-    $('plainSummary').textContent = d.plain_summary || '';
     const p = d.plan || {};
-    const cached = d.stage_reached === 'cache';
     $('planKv').innerHTML = `
-      <dt>cartridge</dt><dd>${esc((d.cartridge_id||'').slice(0,16))}…${cached
-        ? ' <span class="pill mute">served from cache — nothing was retrained</span>' : ''}</dd>
-      <dt>status</dt><dd><span class="pill ${d.status === 'certified' ? 'ok' : 'warn'}">${esc(d.status)}</span></dd>
-      <dt>base</dt><dd>${esc(p.base_ref||'')}</dd>
-      <dt>method</dt><dd>${esc(p.peft_method||'')} · ${esc(p.quantiser||'')} · ${esc(p.target||'')}</dd>
-      <dt>data</dt><dd>${d.n_train} train / ${d.n_holdout} held out · labels: ${(d.labels||[]).join(', ')}</dd>
-      <dt>weights</dt><dd>${d.weights_bytes} bytes</dd>`;
-    $('testPanel').classList.remove('hidden');
-    $('shipPanel').classList.remove('hidden');
+      <dt>Cartridge</dt><dd>${esc((d.cartridge_id || '').slice(0, 24))}…${cached
+        ? ' <span class="chip cyan">served from cache — nothing retrained</span>' : ''}</dd>
+      <dt>Base</dt><dd>${esc(p.base_ref || '—')}</dd>
+      <dt>Build</dt><dd>${esc(p.peft_method || '—')} · ${esc(p.quantiser || '—')} · ${esc(p.target || '—')}</dd>
+      <dt>Corpus</dt><dd>${d.n_seeds} real seeds${
+        d.n_train > d.n_seeds ? ` → ${d.n_train} rows after amplification` : ''
+      } · ${d.n_holdout} held out, never amplified · ${(d.labels || []).map(esc).join(' / ')}</dd>
+      <dt>Weights</dt><dd>${Number(d.weights_bytes || 0).toLocaleString()} bytes on disk</dd>`;
+    unlock('testPanel'); unlock('shipPanel');
     $('predWrap').classList.add('hidden');
     $('packOut').classList.add('hidden');
     $('dlBtn').classList.add('hidden');
-    setStep(3);
   } else {
     CURRENT = null;
     $('admittedBox').classList.add('hidden');
-    $('testPanel').classList.add('hidden');
-    $('shipPanel').classList.add('hidden');
     const box = $('refusalBox');
-    box.innerHTML = `<strong>Refused at ${esc(d.stage_reached || 'gate')}.</strong> ${esc(d.refusal || '')}
-      <div class="hint" style="margin-top:8px">A refusal is a result, not a crash — the compiler declined to build
-      something it could not certify, and said why.</div>`;
+    box.innerHTML = `
+      <div class="stamp">■ HOLD — ${esc((d.stage_reached || 'gate').toUpperCase())}</div>
+      <div class="body">${esc(d.refusal || 'no reason recorded')}</div>
+      <div class="why">A hold is a result, not a crash. The compiler declined to build something
+        it could not certify, and said which constraint stopped it — before spending anything on it.</div>`;
     box.classList.remove('hidden');
   }
 
-  const axes = d.axes || [];
-  if (axes.length) {
-    $('axesWrap').classList.remove('hidden');
-    $('axes').innerHTML = axes.map((a) => `
-      <tr>
-        <td>${esc(a.name)}</td>
-        <td>${a.score.toFixed(3)}</td>
-        <td>${a.threshold.toFixed(2)}</td>
-        <td><span class="pill ${a.passed ? 'ok' : 'bad'}">${a.passed ? 'pass' : 'fail'}</span></td>
-        <td><span class="pill ${a.blocking ? 'warn' : 'mute'}">${a.blocking ? 'blocking' : 'advisory'}</span></td>
-      </tr>`).join('');
-  } else {
-    $('axesWrap').classList.add('hidden');
-  }
+  renderAxes(d);
 
   const qs = d.questions || [];
   $('questionsHint').textContent = qs.length
-    ? `FORGE would still ask ${qs.length} question(s): ` + qs.map((q) => q.question).join('  ·  ')
+    ? `FORGE WOULD STILL ASK ${qs.length}: ` + qs.map((q) => q.question).join('  ·  ')
     : '';
 
   loadModels();
 }
 
+/* ===================== the instrument panel ============================== */
+const R = 26, CIRC = 2 * Math.PI * R, SWEEP = CIRC * 0.75;   // 270° dial
+
+function gauge(a, i) {
+  const colour = a.passed ? (a.blocking ? 'var(--go)' : 'var(--cyan)') : 'var(--nogo)';
+  const pct = Math.max(0, Math.min(1, a.score));
+  // Threshold tick, placed on the same 270° sweep the arc uses.
+  const ang = (-225 + a.threshold * 270) * Math.PI / 180;
+  const x1 = 34 + Math.cos(ang) * (R - 6), y1 = 34 + Math.sin(ang) * (R - 6);
+  const x2 = 34 + Math.cos(ang) * (R + 5), y2 = 34 + Math.sin(ang) * (R + 5);
+  return `
+    <div class="gauge" style="animation-delay:${i * 60}ms">
+      <svg width="68" height="68" viewBox="0 0 68 68">
+        <circle cx="34" cy="34" r="${R}" fill="none" stroke="rgba(88,190,255,0.13)"
+                stroke-width="5" stroke-linecap="round"
+                stroke-dasharray="${SWEEP} ${CIRC}" transform="rotate(135 34 34)"/>
+        <circle class="arc" cx="34" cy="34" r="${R}" fill="none" stroke="${colour}"
+                stroke-width="5" stroke-linecap="round"
+                stroke-dasharray="${SWEEP} ${CIRC}"
+                stroke-dashoffset="${SWEEP}" transform="rotate(135 34 34)"
+                data-target="${SWEEP * (1 - pct)}"/>
+        <line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}"
+              stroke="var(--amber)" stroke-width="1.5" opacity="0.85"/>
+        <text x="34" y="39" text-anchor="middle" class="val" fill="${colour}">${
+          (a.score * 100).toFixed(0)}</text>
+      </svg>
+      <div class="axis">${esc(a.name)}</div>
+      <div class="role ${a.blocking ? 'block' : 'adv'}">${a.blocking ? 'BLOCKING' : 'ADVISORY'}</div>
+    </div>`;
+}
+
+function renderAxes(d) {
+  const axes = d.axes || [];
+  if (!axes.length) { $('instrumentPanel').classList.add('locked'); return; }
+  unlock('instrumentPanel');
+
+  $('plainSummary').textContent = d.plain_summary || '';
+  const stamp = $('statusStamp');
+  stamp.className = 'stamp ' + (d.status || '');
+  stamp.textContent = (d.status || '').toUpperCase();
+  $('claimBox').classList.toggle('hidden', !d.plain_summary);
+  $('axesNote').textContent = 'The tick on each dial is the bar that axis has to clear. '
+    + 'Amber axes block admission; grey axes advise — seven blocking gates would ship '
+    + 'only a fraction of the models that are actually good enough.';
+
+  $('axes').innerHTML = axes.map(gauge).join('');
+  // Set the real offsets on the next frame so the CSS transition has a
+  // from-state to animate out of; without the deferral it starts at its end.
+  const sweepIn = () => $('axes').querySelectorAll('.arc').forEach((el) => {
+    el.setAttribute('stroke-dashoffset', el.dataset.target);
+  });
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(sweepIn);
+  else sweepIn();
+}
+
+/* ===================== live fire ======================================== */
 $('predictBtn').addEventListener('click', async () => {
   const btn = $('predictBtn'), err = $('predErr');
   err.classList.add('hidden');
-  if (!CURRENT) { err.textContent = 'Build a model first.'; err.classList.remove('hidden'); return; }
+  if (!CURRENT) { err.textContent = 'NO ARTEFACT — build a model first.'; err.classList.remove('hidden'); return; }
 
   const texts = $('testText').value.split('\n').map((s) => s.trim()).filter(Boolean);
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Running…';
+  btn.disabled = true;
+  const restore = btn.textContent;
+  btn.textContent = 'Running…';
   try {
     const r = await fetch('/api/predict', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -449,24 +936,34 @@ $('predictBtn').addEventListener('click', async () => {
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
-    $('preds').innerHTML = d.predictions.map((p) => `
-      <tr><td><span class="pill ${p.label === 'positive' ? 'ok' : 'bad'}">${esc(p.label)}</span></td>
-      <td style="font-family:inherit">${esc(p.text)}</td></tr>`).join('');
+    $('preds').innerHTML = d.predictions.map((p, i) => `
+      <tr style="animation-delay:${i * 80}ms">
+        <td><span class="chip ${p.label === 'positive' ? 'ok' : 'bad'}">${esc(p.label)}</span></td>
+        <td style="font-family:var(--sans);color:var(--muted)">${esc(p.text)}</td>
+      </tr>`).join('');
     $('predWrap').classList.remove('hidden');
-    setStep(4);
   } catch (e) {
     err.textContent = e.message || String(e);
     err.classList.remove('hidden');
-  } finally { btn.disabled = false; btn.textContent = 'Run inference'; }
+  } finally { btn.disabled = false; btn.textContent = restore; }
 });
 
+/* ===================== launch =========================================== */
 $('packBtn').addEventListener('click', async () => {
   const btn = $('packBtn'), err = $('packErr'), out = $('packOut');
   err.classList.add('hidden'); out.classList.add('hidden');
-  if (!CURRENT) { err.textContent = 'Build a model first.'; err.classList.remove('hidden'); return; }
+  if (!CURRENT) { err.textContent = 'NO ARTEFACT — build a model first.'; err.classList.remove('hidden'); return; }
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Freezing binary… (30–90s)';
+  const restore = btn.innerHTML;
+  // A real elapsed counter, not a fake progress bar: nothing here knows how
+  // long PyInstaller will take, and a bar that pretends to would be a lie.
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    btn.innerHTML = `◈ &nbsp;Freezing… ${((Date.now() - t0) / 1000).toFixed(0)}s`;
+  }, 250);
+  btn.innerHTML = '◈ &nbsp;Freezing… 0s';
+
   try {
     const r = await fetch('/api/package', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -474,53 +971,56 @@ $('packBtn').addEventListener('click', async () => {
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'packaging failed');
-    out.innerHTML = `<pre>${esc(d.exe_name)}   ${d.size_mb} MB   no Python required
+    out.innerHTML = `<pre class="padout"><span style="color:var(--go)">▲ LAUNCH READY</span>   ${
+      esc(d.exe_name)}   ${d.size_mb} MB   no python required   ${
+      ((Date.now() - t0) / 1000).toFixed(1)}s to freeze
 
-  ${esc(d.exe_name)} "text to classify"     one input
-  ${esc(d.exe_name)}                        interactive
-  type input.txt | ${esc(d.exe_name)} -     a file, one line each</pre>`;
+  ${esc(d.exe_name)} "text to classify"      one input
+  ${esc(d.exe_name)}                         interactive
+  type input.txt | ${esc(d.exe_name)} -      a file, one line each</pre>`;
     out.classList.remove('hidden');
+    out.classList.add('liftoff');
     $('dlBtn').classList.remove('hidden');
-    await loadModels();   // the table's Packaged column is now stale
+    await loadModels();          // the fleet's Packaged column is now stale
   } catch (e) {
     err.textContent = e.message || String(e);
     err.classList.remove('hidden');
-  } finally { btn.disabled = false; btn.textContent = 'Build .exe'; }
+  } finally {
+    clearInterval(tick);
+    btn.disabled = false;
+    btn.innerHTML = restore;
+  }
 });
 
 $('dlBtn').addEventListener('click', () => {
   if (CURRENT) window.location.href = '/api/download/' + CURRENT;
 });
 
+/* ===================== fleet ============================================ */
 async function loadModels() {
   try {
     const r = await fetch('/api/models');
-    const d = await r.json();
-    const rows = d.models || [];
-    $('models').innerHTML = rows.length ? rows.map((m) => `
-      <tr>
-        <td>${esc(m.cartridge_id.slice(0,12))}…</td>
+    const rows = (await r.json()).models || [];
+    $('models').innerHTML = rows.length ? rows.map((m, i) => `
+      <tr style="animation-delay:${i * 60}ms">
+        <td>${esc(m.cartridge_id.slice(0, 12))}…</td>
         <td>${esc(m.task || '')}</td>
-        <td>${esc(m.base_ref || '')}</td>
-        <td><span class="pill ${m.certified ? 'ok' : 'bad'}">${m.certified ? 'yes' : 'no'}</span></td>
-        <td><span class="pill ${m.servable ? 'ok' : 'mute'}">${m.servable ? 'yes' : 'no'}</span></td>
+        <td style="color:var(--muted)">${esc(m.base_ref || '')}</td>
+        <td><span class="chip ${m.certified ? 'ok' : 'bad'}">${m.certified ? 'yes' : 'no'}</span></td>
+        <td><span class="chip ${m.servable ? 'ok' : 'mute'}">${m.servable ? 'yes' : 'no'}</span></td>
         <td>${m.packaged
-          ? `<span class="pill ok">${m.exe_size_mb} MB</span>`
-          : '<span class="pill mute">no</span>'}</td>
+          ? `<span class="chip cyan">${m.exe_size_mb} MB</span>`
+          : '<span class="chip mute">no</span>'}</td>
       </tr>`).join('')
-      : '<tr><td colspan="6" style="color:var(--muted);font-family:inherit">Nothing built yet.</td></tr>';
-  } catch { /* the table just stays as it was */ }
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) =>
-    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+      : '<tr><td colspan="6" style="color:var(--dim)">NO ARTEFACTS — the fleet is empty.</td></tr>';
+  } catch { /* the table keeps whatever it last showed */ }
 }
 
 $('refreshModels').addEventListener('click', loadModels);
 checkHealth();
 loadModels();
 updateDataHint();
+resetSequence(false);
 </script>
 </body>
 </html>
