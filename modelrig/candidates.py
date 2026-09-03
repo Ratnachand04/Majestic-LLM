@@ -42,6 +42,10 @@ class CandidateResult:
     error: str = ""
     compression: dict = field(default_factory=dict)
     quantisation: dict = field(default_factory=dict)
+    #: The trained, quantised model itself — the thing the customer actually
+    #: receives. Without it the pipeline proves a model is good and then throws
+    #: it away, leaving a certificate that points at no weights.
+    model: Optional[dict] = None
 
     @property
     def task_score(self) -> float:
