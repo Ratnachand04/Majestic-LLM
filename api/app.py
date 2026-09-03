@@ -70,7 +70,7 @@ class PackageBody(BaseModel):
 def create_app():
     """Build the FastAPI app. Imported lazily so tests can skip without fastapi."""
     from fastapi import FastAPI, HTTPException
-    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
     from api import studio
 
@@ -105,6 +105,31 @@ def create_app():
             offline=body.offline,
         )
         return outcome.as_dict()
+
+    @app.post("/api/build/stream")
+    def build_stream_route(body: BuildBody):
+        """The same build, streamed as server-sent events.
+
+        The compile is under a second, so this is not about waiting — it is
+        about showing which subsystem spent it. Every event carries a measured
+        elapsed time, so the sequence on screen is the sequence that ran.
+        """
+        import json
+
+        def sse():
+            examples = [(e.text, e.label) for e in body.examples]
+            for event in studio.build_stream(
+                body.description, examples,
+                quality_gate=body.quality_gate, offline=body.offline,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+
+        return StreamingResponse(
+            sse(),
+            media_type="text/event-stream",
+            # Proxies that buffer would defeat the point of streaming at all.
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.get("/api/models")
     def models_route() -> dict[str, Any]:
