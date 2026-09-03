@@ -346,6 +346,62 @@ class TestLayersCompose:
         data = next(s for s in finished if s["stage"] == "data")
         assert data["elapsed_ms"] > 0
 
+    def test_two_different_corpora_never_share_a_cartridge(self, tmp_path):
+        """Part 5 §8: seed_data_ref is in the cache key so identical
+        requirements over different data cannot collide.
+
+        A spam filter and a sentiment classifier are described almost
+        identically. With a constant corpus reference the second build is
+        served the first one's cartridge, and a model asked to catch spam
+        answers "positive" — silently, with a valid-looking certificate
+        attached. This is the seam where the guard is actually applied.
+        """
+        description = (
+            "Classify text on an android phone. Must work offline. "
+            "Flag anything uncertain."
+        )
+        sentiment = _corpus()
+        spam = [
+            (f"{text} (row {i})", label)
+            for i, (text, label) in enumerate(
+                [("win a free prize click now", "spam"),
+                 ("cheap pills no prescription", "spam"),
+                 ("you have inherited a fortune", "spam"),
+                 ("verify your bank details urgently", "spam"),
+                 ("can we move the meeting to friday", "ham"),
+                 ("attaching the quarterly figures", "ham"),
+                 ("thanks for the contract", "ham"),
+                 ("reminder about tomorrow's standup", "ham")] * 15
+            )
+        ]
+
+        first = studio.build(description, sentiment, registry_path=tmp_path)
+        second = studio.build(description, spam, registry_path=tmp_path)
+        assert first.admitted and second.admitted
+        assert first.cartridge_id != second.cartridge_id, "cache collided across corpora"
+
+        # The decisive check: the SERVED model must emit the labels its own
+        # corpus taught it, not the other build's.
+        served = studio.predict(
+            second.cartridge_id, ["win a free prize click now"], tmp_path,
+        )
+        assert served["predictions"][0]["label"] in {"spam", "ham"}
+
+        # And the same corpus twice must still hit the cache — the fix must not
+        # simply disable reuse.
+        again = studio.build(description, sentiment, registry_path=tmp_path)
+        assert again.cartridge_id == first.cartridge_id
+        assert again.stage_reached == "cache"
+
+    def test_the_labels_a_cartridge_reports_are_the_labels_it_can_emit(self, tmp_path):
+        """A build that reports one label set and serves another is worse than
+        a build that fails: it looks correct."""
+        out = studio.build(
+            "Classify support tickets by sentiment on an android phone, offline",
+            _corpus(), registry_path=tmp_path,
+        )
+        assert studio.list_models(tmp_path)[0]["labels"] == sorted(out.labels)
+
     def test_seeds_and_amplified_rows_are_reported_separately(self, tmp_path):
         """The Data Factory is the authority on its own split.
 
