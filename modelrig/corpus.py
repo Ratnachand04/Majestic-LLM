@@ -33,8 +33,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
@@ -83,7 +84,8 @@ def check_monotone(generations: Sequence[Generation]) -> list[str]:
     generation 4 and 5" is.
     """
     problems: list[str] = []
-    for earlier, later in zip(generations, generations[1:]):
+    # Deliberate pairwise window: the sequences differ in length by one.
+    for earlier, later in zip(generations, generations[1:], strict=False):
         lost = earlier.record_ids - later.record_ids
         if lost:
             problems.append(
