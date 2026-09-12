@@ -25,8 +25,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
@@ -75,7 +76,7 @@ class Step:
     """One reason/act/observe turn."""
 
     thought: str = ""
-    call: Optional[ToolCall] = None
+    call: ToolCall | None = None
     observation: Any = None
     tainted: bool = False
     error: str = ""
