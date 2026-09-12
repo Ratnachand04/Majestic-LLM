@@ -18,9 +18,10 @@ Build Plan IR when the ML extras are installed.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig import classifier
@@ -113,7 +114,7 @@ class _Telemetry:
     watching by the end.
     """
 
-    def __init__(self, on_event: Optional[ProgressFn] = None) -> None:
+    def __init__(self, on_event: ProgressFn | None = None) -> None:
         self._on_event = on_event
         self._started: dict[str, float] = {}
         self.events: list[StageEvent] = []
@@ -147,22 +148,22 @@ class CompileResult:
 
     spec: SpecIR
     admitted: bool = False
-    plan: Optional[BuildPlanIR] = None
-    artefact: Optional[ArtefactIR] = None
-    cartridge: Optional[Cartridge] = None
-    cartridge_id: Optional[str] = None
-    scorecard: Optional[Scorecard] = None
+    plan: BuildPlanIR | None = None
+    artefact: ArtefactIR | None = None
+    cartridge: Cartridge | None = None
+    cartridge_id: str | None = None
+    scorecard: Scorecard | None = None
     gates: list[GateResult] = field(default_factory=list)
     cache_hit: bool = False
     refusal: str = ""
     repair_suggestions: list[str] = field(default_factory=list)
     stage_reached: str = "gate1"
-    selection: Optional[Selection] = None
+    selection: Selection | None = None
     repair_attempts: int = 0
-    quantisation: Optional[dict[str, Any]] = None
+    quantisation: dict[str, Any] | None = None
     #: Where the trained weights were written. The cartridge manifest is the
     #: certificate; this is the thing the certificate is about.
-    weights_path: Optional[Path] = None
+    weights_path: Path | None = None
     #: True only when the SPEC asked for parallel candidates. §15: they raise
     #: expected cost, so they are never enabled on the customer's behalf.
     parallel_candidates: bool = False
@@ -197,10 +198,10 @@ class MajesticCompiler:
 
     def __init__(
         self,
-        registry: Optional[CartridgeRegistry] = None,
-        catalogue: Optional[Catalogue] = None,
-        profiler: Optional[YamlDeviceProfiler] = None,
-        data_factory: Optional[DataFactory] = None,
+        registry: CartridgeRegistry | None = None,
+        catalogue: Catalogue | None = None,
+        profiler: YamlDeviceProfiler | None = None,
+        data_factory: DataFactory | None = None,
         base_path: str | Path = "./registry",
         n_candidates: int = 2,
         max_repair_attempts: int = 2,
@@ -247,8 +248,11 @@ class MajesticCompiler:
             reference_predictions=reference_preds,
             quantised_predictions=quantised_preds,
             calibration=calibration,
-            confidences=[1.0 if p == g else 0.0 for p, g in zip(quantised_preds, gold)],
-            correct=[p == g for p, g in zip(quantised_preds, gold)],
+            confidences=[
+                1.0 if p == g else 0.0
+                for p, g in zip(quantised_preds, gold, strict=True)
+            ],
+            correct=[p == g for p, g in zip(quantised_preds, gold, strict=True)],
         )
 
         ground = ProvingGround(quality_gate=spec.quality_gate)
@@ -332,7 +336,7 @@ class MajesticCompiler:
         *,
         use_cache: bool = True,
         allow_repair: bool = True,
-        progress: Optional[ProgressFn] = None,
+        progress: ProgressFn | None = None,
     ) -> CompileResult:
         """Run the full flow for one specification.
 
@@ -531,10 +535,13 @@ class MajesticCompiler:
             self.planner.record_outcome(spec, plan, passed=False)
             logger.warning("compile: refused at Gate 3 — %s", result.refusal)
             return result
+        licence_name = (
+            chain.resolved_licence.value if chain.resolved_licence else "unresolved"
+        )
         tel.done(
             "gate3",
-            detail=f"licence {chain.resolved_licence.value if chain.resolved_licence else 'unresolved'}"
-                   f" · {len(chain.obligations)} obligation(s) · evidence attached",
+            detail=f"licence {licence_name} · {len(chain.obligations)} "
+                   f"obligation(s) · evidence attached",
         )
 
         # --- CARTRIDGE + REGISTRY ------------------------------------------ #
