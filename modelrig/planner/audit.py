@@ -32,8 +32,9 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig.planner.predicates import HARD, SOFT
