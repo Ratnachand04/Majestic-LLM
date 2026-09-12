@@ -10,7 +10,7 @@ import json
 import random
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig.buildspec import BuildSpec, DeviceProfile, TrainingMethod
@@ -51,9 +51,9 @@ class DistillationLoop(TeacherFactoryLoop):
 
     def __init__(
         self,
-        factory: Optional[Factory] = None,
-        profiler: Optional[YamlDeviceProfiler] = None,
-        feasibility: Optional[HeuristicFeasibilityEngine] = None,
+        factory: Factory | None = None,
+        profiler: YamlDeviceProfiler | None = None,
+        feasibility: HeuristicFeasibilityEngine | None = None,
         data_dir: str | Path = "./registry/datasets",
         n_examples: int = 40,
     ) -> None:
