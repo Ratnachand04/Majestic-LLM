@@ -33,9 +33,10 @@ import hashlib
 import random
 import re
 from collections import Counter
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig.primitives import TaskPrimitive
@@ -356,7 +357,7 @@ def augment(
 
     for text, label in seeds:
         sid = source_id_of(text)
-        for i in range(per_seed):
+        for _ in range(per_seed):
             depth = rng.randint(1, min(max_depth, len(ops)))
             chosen = rng.sample(ops, depth)
             operator = compose(chosen, max_depth)
