@@ -36,9 +36,10 @@ precisely on point.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
@@ -99,7 +100,8 @@ class GenerationLog:
         if len(accepted) < window:
             return False
         recent = accepted[-window:]
-        return all(b < a for a, b in zip(recent, recent[1:]))
+        # Deliberate sliding window — lengths differ by one by construction.
+        return all(b < a for a, b in zip(recent, recent[1:], strict=False))
 
     def to_dict(self) -> dict[str, Any]:
         return {
