@@ -19,9 +19,9 @@ Selection is lexicographic, and deliberately so:
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Sequence
 
 from majestic.logging_utils import get_logger
 from modelrig.catalogue import DEFAULT_CATALOGUE, Catalogue
@@ -36,7 +36,7 @@ class CandidateResult:
     """One trained-and-scored candidate."""
 
     plan: BuildPlanIR
-    scorecard: Optional[Scorecard] = None
+    scorecard: Scorecard | None = None
     latency_ms: float = 0.0
     params_b: float = 0.0
     error: str = ""
@@ -45,7 +45,7 @@ class CandidateResult:
     #: The trained, quantised model itself — the thing the customer actually
     #: receives. Without it the pipeline proves a model is good and then throws
     #: it away, leaving a certificate that points at no weights.
-    model: Optional[dict] = None
+    model: dict | None = None
 
     @property
     def task_score(self) -> float:
@@ -63,7 +63,7 @@ class CandidateResult:
 class Selection:
     """The winner, the losers, and why."""
 
-    winner: Optional[CandidateResult] = None
+    winner: CandidateResult | None = None
     candidates: list[CandidateResult] = field(default_factory=list)
     rationale: str = ""
 
@@ -121,7 +121,7 @@ def _guarded(build_fn: BuildFn, plan: BuildPlanIR) -> CandidateResult:
 def select(
     results: Sequence[CandidateResult],
     spec: SpecIR,
-    catalogue: Optional[Catalogue] = None,
+    catalogue: Catalogue | None = None,
 ) -> Selection:
     """Score both, pick one — latency budget is a hard filter, not a tiebreak."""
     catalogue = catalogue or DEFAULT_CATALOGUE
