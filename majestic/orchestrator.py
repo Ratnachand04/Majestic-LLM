@@ -8,7 +8,7 @@ degrades gracefully (no encoding, no grounding, no verification gate).
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from majestic.core.reasoning_core import ReasoningCore
 from majestic.experts.registry import ExpertRegistry
@@ -29,10 +29,10 @@ class Orchestrator:
         core: ReasoningCore,
         router: Router,
         experts: ExpertRegistry,
-        rag: Optional[RAGPipeline] = None,
-        verifier: Optional[Verifier] = None,
-        encoder: Optional[Encoder] = None,
-        memory: Optional[Memory] = None,
+        rag: RAGPipeline | None = None,
+        verifier: Verifier | None = None,
+        encoder: Encoder | None = None,
+        memory: Memory | None = None,
     ) -> None:
         self.core = core
         self.router = router
@@ -47,7 +47,7 @@ class Orchestrator:
         trace: list[str] = []
 
         # 1. encode (perception -> shared bus). Optional; failures are non-fatal.
-        embedding: Optional[list[float]] = None
+        embedding: list[float] | None = None
         if self.encoder is not None:
             try:
                 embedding = self.encoder.encode(request.content)
