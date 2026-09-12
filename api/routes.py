@@ -6,14 +6,12 @@ tested without a running server.
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from api.schemas import GenerateRequest, GenerateResponse
 from majestic.orchestrator import Orchestrator
 from majestic.types import Modality, Request
 
 # A lazily-built default orchestrator, shared across calls.
-_DEFAULT: Optional[Orchestrator] = None
+_DEFAULT: Orchestrator | None = None
 
 
 def _get_orchestrator() -> Orchestrator:
@@ -26,7 +24,7 @@ def _get_orchestrator() -> Orchestrator:
 
 
 def generate(
-    request: GenerateRequest, orchestrator: Optional[Orchestrator] = None
+    request: GenerateRequest, orchestrator: Orchestrator | None = None
 ) -> GenerateResponse:
     """Handle a generation request via the Orchestrator."""
     orch = orchestrator or _get_orchestrator()
