@@ -52,8 +52,8 @@ import math
 import random
 import re
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 import numpy as np
 
@@ -160,7 +160,7 @@ def _minhash(text: str, num_perm: int = 32) -> tuple[int, ...]:
 
 
 def _jaccard(a: tuple[int, ...], b: tuple[int, ...]) -> float:
-    return sum(1 for x, y in zip(a, b) if x == y) / len(a) if a else 0.0
+    return sum(1 for x, y in zip(a, b, strict=True) if x == y) / len(a) if a else 0.0
 
 
 def diversity_entropy(examples: Iterable[Example]) -> float:
