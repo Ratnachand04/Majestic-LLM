@@ -66,7 +66,7 @@ def test_quantize_roundtrip_preserves_predictions(quant):
     after = classifier.predict(q_model, texts)
     assert report["ratio"] > 1.0
     # Lossy but should agree on clearly separable data.
-    agree = sum(int(a == b) for a, b in zip(before, after)) / len(before)
+    agree = sum(int(a == b) for a, b in zip(before, after, strict=True)) / len(before)
     assert agree >= 0.9
 
 
