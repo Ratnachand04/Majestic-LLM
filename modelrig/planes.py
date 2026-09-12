@@ -86,8 +86,14 @@ class EvalPlane(Plane):
         model, test = ctx["model"], ctx["test"]
         texts = [t for t, _ in test]
         gold = [label for _, label in test]
-        preds = _predict(model, texts)
-        correct = sum(int(p == g) for p, g in zip(preds, gold))
+        preds = list(_predict(model, texts))
+        if len(preds) != len(gold):
+            raise ValueError(
+                f"scorer returned {len(preds)} predictions for {len(gold)} "
+                f"examples; a truncated comparison would be divided by the full "
+                f"count and report a score the model never earned"
+            )
+        correct = sum(int(p == g) for p, g in zip(preds, gold, strict=True))
         score = correct / len(gold) if gold else 0.0
         passed = score >= spec.target_score
         report = {
