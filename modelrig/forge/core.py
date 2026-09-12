@@ -37,9 +37,10 @@ are still empty, then run the marginal rule until it fails.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig.forge import slots as slot_table
