@@ -15,7 +15,8 @@ import math
 
 import pytest
 
-from modelrig.forge import Forge, slots as slot_table
+from modelrig.forge import Forge
+from modelrig.forge import slots as slot_table
 from modelrig.forge.core import (
     ATTRITION_GAMMA,
     Interviewer,
@@ -27,7 +28,7 @@ from modelrig.forge.core import (
     worth_asking,
 )
 from modelrig.forge.infogain import PlanSignature, information_gain
-from modelrig.forge.posterior import canonical_key, candidate_values, parse_K
+from modelrig.forge.posterior import candidate_values, canonical_key, parse_K
 from modelrig.forge.slots import AskPolicy, IGClass, Source
 from modelrig.planner.objective import Tier
 from modelrig.primitives import TaskPrimitive
