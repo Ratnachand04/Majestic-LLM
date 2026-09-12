@@ -15,14 +15,15 @@ stronger argument: for the dominant dimension there is *nothing to enumerate*.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
-from modelrig.ir import BuildPlanIR, SpecIR
 from modelrig import quantformat
-from modelrig.planner import objective, predicates
 from modelrig.catalogue import ladder_tier
+from modelrig.ir import BuildPlanIR, SpecIR
+from modelrig.planner import objective, predicates
 from modelrig.planner.catalog import Catalog, ModelSpec, default_catalog
 from modelrig.planner.costmodel import USD, usd
 from modelrig.planner.metalearn import OutcomePredictor, PrecedentIndex, features_of
@@ -54,7 +55,7 @@ class PlanCandidate:
     """One point of the plan space, with a stable identity for witnesses."""
 
     base: ModelSpec
-    teacher: Optional[ModelSpec]
+    teacher: ModelSpec | None
     distil_mode: str
     peft_method: str
     rank: int
@@ -384,8 +385,8 @@ def _score(
 class PlanOutcome:
     """Either an admitted plan or a refusal, plus how it was reached."""
 
-    plan: Optional[BuildPlanIR] = None
-    refusal: Optional[Refusal] = None
+    plan: BuildPlanIR | None = None
+    refusal: Refusal | None = None
     path: str = "deterministic"          # precedent | deterministic | refused
     utility: float = 0.0
     predicted_quality: float = 0.0
