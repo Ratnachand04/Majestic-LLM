@@ -17,8 +17,9 @@ that forgets will be the one written in a hurry six months from now.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
@@ -157,7 +158,11 @@ def normalise_by_tokens(
     total_tokens = sum(microbatch_tokens)
     if total_tokens == 0:
         return 0.0
-    return sum(loss * n for loss, n in zip(microbatch_losses, microbatch_tokens)) / total_tokens
+    weighted = sum(
+        loss * n
+        for loss, n in zip(microbatch_losses, microbatch_tokens, strict=True)
+    )
+    return weighted / total_tokens
 
 
 def naive_microbatch_mean(microbatch_losses: Sequence[float]) -> float:
