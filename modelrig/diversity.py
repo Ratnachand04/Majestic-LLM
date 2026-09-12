@@ -41,8 +41,9 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
@@ -100,8 +101,10 @@ def vendi_score(similarity: Sequence[Sequence[float]]) -> float:
         return 1.0
     try:
         import numpy as np
-    except ImportError:  # pragma: no cover - numpy is a core dependency
-        raise RuntimeError("the Vendi score needs numpy; use effective_modes")
+    except ImportError as exc:  # pragma: no cover - numpy is a core dependency
+        raise RuntimeError(
+            "the Vendi score needs numpy; use effective_modes"
+        ) from exc
 
     kernel = np.asarray(similarity, dtype=float) / n
     eigenvalues = np.linalg.eigvalsh((kernel + kernel.T) / 2.0)
@@ -272,7 +275,7 @@ def coverage(reference: Sequence[Sequence[float]],
 
 
 def _distance(a: Sequence[float], b: Sequence[float]) -> float:
-    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b, strict=True)))
 
 
 @dataclass
