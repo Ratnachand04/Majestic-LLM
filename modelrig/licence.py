@@ -132,7 +132,10 @@ def resolve_licence_chain(
     elif base is Licence.NON_COMMERCIAL and commercial_redistribution:
         reasons.append("base is non-commercial; commercial redistribution is not permitted")
     elif base in _CONDITIONAL:
-        obligations.append(f"comply with {base.value} redistribution terms (attribution, use policy)")
+        obligations.append(
+            f"comply with {base.value} redistribution terms "
+            f"(attribution, use policy)"
+        )
         if base is Licence.LLAMA_COMMUNITY:
             obligations.append("llama-community: name the base in the derived model's name/card")
         if base is Licence.CC_BY_SA_4:
