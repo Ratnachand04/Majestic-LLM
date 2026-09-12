@@ -386,8 +386,9 @@ def test_a_probed_accelerator_narrows_the_planner_grid():
 
 def test_an_assumed_profile_does_not_override_the_prior():
     """The coordinate stops being inferred only once someone measures it."""
+    from modelrig.ir import ProfileSource as SpecProfileSource
+    from modelrig.ir import SpecIR
     from modelrig.planner.core import _probed_accelerator
-    from modelrig.ir import ProfileSource as SpecProfileSource, SpecIR
     from modelrig.primitives import TaskPrimitive
 
     spec = SpecIR(
