@@ -18,8 +18,9 @@ audit is not evidence of anything (GAP-09: trust is the deliverable).
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
