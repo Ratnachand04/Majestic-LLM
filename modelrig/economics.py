@@ -18,8 +18,9 @@ Three results worth knowing before reading the code:
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 MB = 1_000_000
 
