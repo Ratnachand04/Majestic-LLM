@@ -38,9 +38,10 @@ import math
 import random
 import re
 from collections import Counter
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Iterable, Protocol
+from typing import Any, Protocol
 
 from modelrig.forge import slots as slot_table
 
