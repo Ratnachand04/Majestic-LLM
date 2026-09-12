@@ -19,9 +19,10 @@ comes from and whether it is worth a question. The types live in
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from modelrig.licence import DataRights
 from modelrig.primitives import TaskPrimitive
