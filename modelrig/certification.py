@@ -30,11 +30,12 @@ part that matters.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig.probe import DeviceProfile, ProfileSource, Tier
@@ -173,7 +174,7 @@ class OnDeviceRun:
         """
         if not self.outputs or not self.reference_outputs:
             return None
-        same = sum(a == b for a, b in zip(self.outputs, self.reference_outputs))
+        same = sum(a == b for a, b in zip(self.outputs, self.reference_outputs, strict=True))
         return same / len(self.outputs)
 
     @property
