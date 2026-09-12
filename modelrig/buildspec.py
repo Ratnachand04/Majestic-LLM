@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 class TrainingMethod(str, Enum):
@@ -44,8 +44,8 @@ class BuildSpec:
     method: TrainingMethod = TrainingMethod.LORA
     quantization: str = "int4"      # int4 | int8 | none
     runtime: str = "gguf"           # gguf | onnx | npz | coreml | tflite | executorch | mlc
-    device: Optional[DeviceProfile] = None
-    target_metric: Optional[str] = None
+    device: DeviceProfile | None = None
+    target_metric: str | None = None
 
     # --- data & evaluation ---
     dataset: str = "builtin:sentiment"   # "builtin:<name>" or a path to jsonl/csv
