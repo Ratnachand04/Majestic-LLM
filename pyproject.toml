@@ -36,6 +36,13 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# The geometry table is column-aligned on purpose: every row is checked against
+# the model's published config.json, and a wrong n_kv_heads is caught by eye far
+# more easily in aligned columns than in wrapped continuations. Readability wins
+# over the line limit for this one reference table.
+"modelrig/planner/catalog.py" = ["E501"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 addopts = "-q -m 'not integration'"
