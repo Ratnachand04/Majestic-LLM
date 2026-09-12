@@ -45,7 +45,7 @@ def _chain(*nodes: Node, name: str = "g", **kw) -> FabricGraph:
     g = FabricGraph(name=name, **kw)
     for node in nodes:
         g.add(node)
-    for a, b in zip(nodes, nodes[1:]):
+    for a, b in zip(nodes, nodes[1:], strict=False):   # sliding window
         g.connect(a.name, b.name)
     return g
 
@@ -420,7 +420,8 @@ def test_the_graph_hash_changes_when_the_structure_does():
 
 
 def test_the_hash_is_stable_across_equal_graphs():
-    build = lambda: _chain(Node("a", NodeKind.CARTRIDGE), Node("b", NodeKind.OUTPUT))
+    def build():
+        return _chain(Node("a", NodeKind.CARTRIDGE), Node("b", NodeKind.OUTPUT))
     assert build().graph_hash == build().graph_hash
 
 
