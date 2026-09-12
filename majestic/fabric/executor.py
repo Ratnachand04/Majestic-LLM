@@ -22,8 +22,9 @@ the graph is constructed dynamically.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from majestic.fabric.analyser import analyse
 from majestic.fabric.graph import FabricGraph
@@ -66,7 +67,7 @@ class ExecutionResult:
     total_ms: float = 0.0
     cost_usd: float = 0.0
 
-    def node(self, name: str) -> Optional[NodeTrace]:
+    def node(self, name: str) -> NodeTrace | None:
         return next((t for t in self.trace if t.name == name), None)
 
 
