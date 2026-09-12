@@ -250,8 +250,8 @@ def check_elicitation_conformance() -> ConformanceReport:
     """
     from modelrig.forge import slots as slot_table
     from modelrig.forge.core import (
-        MAX_AMBIGUITY,
         ATTRITION_GAMMA,
+        MAX_AMBIGUITY,
         completion_probability,
         value_ratio,
     )
