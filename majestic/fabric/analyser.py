@@ -16,8 +16,9 @@ Four properties are proven before the graph ever runs:
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 from majestic.fabric.capacity import CapacityReport, analyse_capacity
 from majestic.fabric.graph import FabricGraph, NodeKind
@@ -307,7 +308,9 @@ def prove_offline(graph: FabricGraph) -> tuple[bool, list[str]]:
 # =========================================================================== #
 # §14 — latency along the critical path
 # =========================================================================== #
-def critical_path(graph: FabricGraph, swap_ms: float | None = None) -> tuple[tuple[str, ...], float]:
+def critical_path(
+    graph: FabricGraph, swap_ms: float | None = None,
+) -> tuple[tuple[str, ...], float]:
     """The slowest path through the graph, in one topological pass.
 
     Latency compounds: a downstream node's input includes its predecessor's
