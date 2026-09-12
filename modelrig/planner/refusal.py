@@ -18,8 +18,9 @@ real problems rather than forty redundant ones.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from modelrig.planner.predicates import HARD, SOFT, PredicateResult
 
@@ -153,7 +154,7 @@ class Refusal:
     def render(self) -> str:
         """The customer-facing account. This is what is actually sold."""
         lines = ["REFUSED — no feasible plan", ""]
-        for name, reason in zip(self.witness, self.reasons):
+        for name, reason in zip(self.witness, self.reasons, strict=True):
             tag = "hard" if name in HARD else "soft"
             lines.append(f"  {name:<7} [{tag}] {reason}")
         if self.remedies:
