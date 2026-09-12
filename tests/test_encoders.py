@@ -19,7 +19,7 @@ def test_similar_texts_closer_than_dissimilar():
     enc = HashingTextEncoder(dim=256)
 
     def cos(u, v):
-        return sum(x * y for x, y in zip(u, v))
+        return sum(x * y for x, y in zip(u, v, strict=True))
 
     base = enc.encode("machine learning models on device")
     near = enc.encode("on device machine learning models")
