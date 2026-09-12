@@ -35,9 +35,10 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig.forge import slots as slot_table
