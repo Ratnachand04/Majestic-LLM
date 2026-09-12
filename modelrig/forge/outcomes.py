@@ -24,10 +24,11 @@ why :meth:`OutcomeLog.trend` refuses to report one without the other.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig.forge.core import ATTRITION_GAMMA
