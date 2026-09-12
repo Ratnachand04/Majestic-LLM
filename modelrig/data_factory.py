@@ -59,6 +59,7 @@ import numpy as np
 
 from majestic.logging_utils import get_logger
 from majestic.perception.encoders import HashingTextEncoder
+from modelrig.augment import MAX_MULTIPLICITY, source_id_of
 from modelrig.primitives import TaskPrimitive, spec_for
 
 logger = get_logger(__name__)
@@ -107,6 +108,15 @@ class QAReport:
     diversity_entropy: float = 0.0
     survival_rate: float = 1.0
     synthetic_ratio: float = 0.0
+    #: §21 — the largest number of training rows tracing back to one real
+    #: document. Memorisation probability rises sharply with duplication count,
+    #: and these weights ship to devices, so the attacker has white-box access.
+    #: The privacy audit runs downstream of this; reporting the figure turns a
+    #: bad extraction rate from a surprise into a prediction.
+    max_source_multiplicity: int = 0
+    #: How many real documents were trimmed for hitting the cap. Non-zero means
+    #: the amplifier wanted more copies of something than is safe to keep.
+    sources_capped: int = 0
     blocked: list[str] = field(default_factory=list)
 
     @property
@@ -127,6 +137,36 @@ class DataBundle:
 
 
 # --------------------------------------------------------------------------- #
+def _cap_multiplicity(
+    attributed: list[tuple[Example, str]], cap: int,
+) -> tuple[list[Example], int, int]:
+    """Bound the rows tracing back to any one real document (§21).
+
+    Returns the surviving rows, the largest multiplicity that survived, and the
+    number of documents trimmed. The figure travels on to the ``QAReport``
+    because the privacy audit downstream measures exactly what it predicts: a
+    build holding forty copies of one document should expect a worse verbatim
+    extraction rate than one holding five. Knowing that before the audit runs
+    turns a bad result from a surprise into a prediction.
+    """
+    kept: list[Example] = []
+    seen: Counter[str] = Counter()
+    wanted: Counter[str] = Counter()
+    for example, sid in attributed:
+        wanted[sid] += 1
+        if seen[sid] < cap:
+            seen[sid] += 1
+            kept.append(example)
+    trimmed = sum(1 for n in wanted.values() if n > cap)
+    if trimmed:
+        logger.info(
+            "data factory: trimmed %d document(s) to the multiplicity cap of %d "
+            "— duplication drives memorisation, and these weights ship to devices",
+            trimmed, cap,
+        )
+    return kept, (max(seen.values()) if seen else 0), trimmed
+
+
 def _tokens(text: str) -> list[str]:
     return _TOKEN_RE.findall(text.lower())
 
@@ -189,12 +229,17 @@ class DataFactory:
         seed: int = 0,
         minhash_threshold: float = 0.85,
         semantic_threshold: float = 0.97,
+        max_multiplicity: int = MAX_MULTIPLICITY,
     ) -> None:
         self.held_out_fraction = held_out_fraction
         self.target_size = target_size
         self.seed = seed
         self.minhash_threshold = minhash_threshold
         self.semantic_threshold = semantic_threshold
+        #: §21 — the privacy control. Bounds how many training rows may trace
+        #: back to one real document, because duplication count is what drives
+        #: verbatim extractability and these weights ship to the device.
+        self.max_multiplicity = max_multiplicity
         self._encoder = HashingTextEncoder(dim=256)
 
     # -- the immutable split --------------------------------------------- #
@@ -210,37 +255,44 @@ class DataFactory:
         return shuffled[n_held:], shuffled[:n_held]
 
     # -- amplification ---------------------------------------------------- #
-    def _backtranslate(self, seeds: list[Example], rng: random.Random) -> list[Example]:
+    def _backtranslate(
+        self, seeds: list[Example], rng: random.Random,
+    ) -> list[tuple[Example, str]]:
         """Generate instruction variants FOR the customer's real documents.
 
         The response side stays the customer's REAL data, so the teacher cannot
         hallucinate the answer. This is the primary path.
         """
-        out: list[Example] = []
+        out: list[tuple[Example, str]] = []
         frames = ("please handle: {}", "{} — what is this?", "input: {}",
                   "review the following. {}", "record says {}")
         for text, label in seeds:
+            sid = source_id_of(text)
             for frame in rng.sample(frames, k=min(3, len(frames))):
-                out.append((frame.format(text), label))
+                out.append(((frame.format(text), label), sid))
         return out
 
-    def _evolve(self, seeds: list[Example], rng: random.Random) -> list[Example]:
+    def _evolve(
+        self, seeds: list[Example], rng: random.Random,
+    ) -> list[tuple[Example, str]]:
         """Deliberately evolve HARD cases: occlusion, drift, adversarial noise.
 
         A flat generator never produces these, and they are exactly the rows the
         deployed model will meet.
         """
-        out: list[Example] = []
+        out: list[tuple[Example, str]] = []
         for text, label in seeds:
+            sid = source_id_of(text)
             toks = text.split()
             if len(toks) > 3:
                 # occlusion: a smudged scan drops a token
                 drop = rng.randrange(len(toks))
-                out.append((" ".join(t for i, t in enumerate(toks) if i != drop), label))
+                out.append(((" ".join(t for i, t in enumerate(toks) if i != drop),
+                             label), sid))
                 # format drift: casing and separators change
-                out.append((" | ".join(toks).upper(), label))
+                out.append(((" | ".join(toks).upper(), label), sid))
                 # truncation: a missing field
-                out.append((" ".join(toks[: max(2, len(toks) // 2)]), label))
+                out.append(((" ".join(toks[: max(2, len(toks) // 2)]), label), sid))
         return out
 
     def rationale_trace(self, text: str, label: str) -> str:
@@ -252,8 +304,15 @@ class DataFactory:
         return f"The salient terms point to {label}. Therefore: {label}."
 
     # -- the blocking QA gates -------------------------------------------- #
-    def _qa(self, pool: list[Example], held_out: list[Example], report: QAReport) -> list[Example]:
-        report.raw_count = len(pool)
+    def _qa(self, pool: list[Example], held_out: list[Example], report: QAReport,
+            raw_total: int | None = None) -> list[Example]:
+        # ``raw_total`` is what the GENERATOR produced, which is not the same as
+        # what arrives here once the multiplicity cap has trimmed excess copies
+        # of a single document. Those trimmed rows are non-survivors in the
+        # sense the collapse guard means: a generator emitting one row five
+        # hundred ways has degenerated, and hiding its output from the
+        # denominator would make that degeneracy look like health.
+        report.raw_count = len(pool) if raw_total is None else raw_total
 
         # 0. PII scrub — before training, not after.
         scrubbed: list[Example] = []
@@ -374,14 +433,25 @@ class DataFactory:
         seeds = scrubbed_seeds
         held_out = [(scrub_pii(t)[0], lab) for t, lab in held_out]
 
-        generated = self._backtranslate(seeds, rng) + self._evolve(seeds, rng)
+        attributed = self._backtranslate(seeds, rng) + self._evolve(seeds, rng)
         if with_rationales:
-            generated += [
-                (f"{t}\n{self.rationale_trace(t, lab)}", lab) for t, lab in seeds
+            attributed += [
+                ((f"{t}\n{self.rationale_trace(t, lab)}", lab),
+                 source_id_of(t))
+                for t, lab in seeds
             ]
 
         report = QAReport()
-        curated = self._qa(generated, held_out, report)
+        # §21 — bound how many rows may trace back to one real document. Twenty
+        # transforms of one scan are twenty near-copies of its content, and
+        # duplication count is what drives verbatim extractability from weights
+        # that ship to devices. Applied BEFORE curation, so the dedup cascade
+        # then thins the survivors further.
+        generated, report.max_source_multiplicity, report.sources_capped = (
+            _cap_multiplicity(attributed, self.max_multiplicity)
+        )
+
+        curated = self._qa(generated, held_out, report, raw_total=len(attributed))
         report.pii_redactions += seed_redactions
 
         # Accumulate: the real seeds always ride along with the synthetic pool.
