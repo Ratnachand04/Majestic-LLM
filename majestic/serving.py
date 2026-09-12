@@ -29,8 +29,9 @@ throttling, not raw speed. Every value here carries ``measured=False``.
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
@@ -293,7 +294,7 @@ def plan_device_deployment(
     context_length: int = 2048,
     n_adapters: int = 20,
     kv_bytes_per_token: float = 114688.0,
-) -> tuple[DeviceBudget, Optional[str]]:
+) -> tuple[DeviceBudget, str | None]:
     """Budget a deployment and report the first line that breaks it."""
     budget = device_budget(
         total_gb=total_gb, base_params_b=base_params_b,
