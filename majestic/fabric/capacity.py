@@ -47,8 +47,9 @@ Two caveats that must travel with any claim made from this:
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from majestic.fabric.graph import UNBOUNDED_BITS, FabricGraph, TaintRole
 from majestic.logging_utils import get_logger
