@@ -135,7 +135,9 @@ def estimate(
     so training cost scales with those — even though the RAM predicate must still
     account for every resident parameter (A-07).
     """
-    trainable_params = model.active_params if (model.is_moe and model.active_params) else model.params
+    trainable_params = (
+        model.active_params if (model.is_moe and model.active_params) else model.params
+    )
     return CostBreakdown(
         generation=generation_cost(n_synthetic) if uses_teacher else 0,
         training=training_cost(trainable_params, n_train_tokens, method),
