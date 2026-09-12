@@ -22,8 +22,9 @@ the achievable speed.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
