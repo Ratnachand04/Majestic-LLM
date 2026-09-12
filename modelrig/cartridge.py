@@ -17,10 +17,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any
-
-from enum import Enum
 
 from modelrig.certification import ArtefactKind, CertificationLedger
 from modelrig.ir import ArtefactIR, BuildPlanIR, SpecIR, content_hash
