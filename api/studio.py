@@ -215,6 +215,7 @@ def build(
                 "name": a.name, "score": round(a.score, 4),
                 "threshold": round(a.threshold, 4),
                 "passed": a.passed, "blocking": a.blocking,
+                "n": a.n, "detail": a.detail,
             }
             for a in card.axes
         ]
@@ -350,6 +351,8 @@ def _hydrate_from_cartridge(outcome: BuildOutcome, cartridge: Any) -> None:
             "threshold": round(float(a.get("threshold", cert.get("threshold", 0.0))), 4),
             "passed": bool(a.get("passed")),
             "blocking": bool(a.get("blocking")),
+            "n": int(a.get("n", cert.get("n_test", 0))),
+            "detail": str(a.get("detail", "")),
         }
         for name, a in ordered
     ]
@@ -419,7 +422,7 @@ def predict(
     except FileNotFoundError as exc:
         return {"predictions": [], "error": str(exc)}
     return {
-        "predictions": [{"text": t, "label": p} for t, p in zip(cleaned, preds)],
+        "predictions": [{"text": t, "label": p} for t, p in zip(cleaned, preds, strict=True)],
         "error": "",
     }
 
