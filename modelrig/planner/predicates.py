@@ -27,12 +27,12 @@ separately instead of inflating one number with the other.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from modelrig.ir import SpecIR
-from modelrig.planner.licence_lattice import resolve as resolve_licence
 from modelrig.planner.catalog import (
     EMBEDDER_BYTES,
     MB,
@@ -42,6 +42,7 @@ from modelrig.planner.catalog import (
     ModelSpec,
 )
 from modelrig.planner.costmodel import USD, usd
+from modelrig.planner.licence_lattice import resolve as resolve_licence
 from modelrig.primitives import TaskPrimitive
 
 
