@@ -30,9 +30,10 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
 from statistics import NormalDist
-from typing import Any, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
@@ -461,8 +462,9 @@ def decompose_flips(reference_correct: Sequence[bool],
     """Split the flips by direction (§12)."""
     if len(reference_correct) != len(candidate_correct):
         raise ValueError("paired comparison needs equal-length sequences")
-    improved = sum(1 for r, c in zip(reference_correct, candidate_correct) if not r and c)
-    degraded = sum(1 for r, c in zip(reference_correct, candidate_correct) if r and not c)
+    pairs = list(zip(reference_correct, candidate_correct, strict=True))
+    improved = sum(1 for r, c in pairs if not r and c)
+    degraded = sum(1 for r, c in pairs if r and not c)
     n = len(reference_correct)
     return FlipDecomposition(improved, degraded, n - improved - degraded, n)
 
@@ -544,8 +546,8 @@ def mcnemar(student_correct: Sequence[bool],
     """
     if len(student_correct) != len(teacher_correct):
         raise ValueError("paired comparison needs equal-length sequences")
-    b = sum(1 for s, t in zip(student_correct, teacher_correct) if s and not t)
-    c = sum(1 for s, t in zip(student_correct, teacher_correct) if t and not s)
+    b = sum(1 for s, t in zip(student_correct, teacher_correct, strict=True) if s and not t)
+    c = sum(1 for s, t in zip(student_correct, teacher_correct, strict=True) if t and not s)
     if b + c == 0:
         return McNemarResult(b, c, 0.0, 1.0)
     chi2 = (abs(b - c) - 1) ** 2 / (b + c)      # with continuity correction
