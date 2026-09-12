@@ -23,8 +23,9 @@ difference between MIN and LRU is several hundred milliseconds per request.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from majestic.fabric.graph import FabricGraph, NodeKind
 from majestic.logging_utils import get_logger
