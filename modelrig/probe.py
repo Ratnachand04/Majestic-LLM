@@ -37,11 +37,12 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from majestic.logging_utils import get_logger
 
@@ -227,7 +228,7 @@ def _least_squares(points: Sequence[ProbePoint]) -> tuple[float, float]:
     denom = sum((x - mean_x) ** 2 for x in xs)
     if denom == 0:
         raise ProbeError("probe points are collinear in size")
-    slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / denom
+    slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys, strict=True)) / denom
     if slope <= 0:
         raise ProbeError("fitted slope is non-positive: larger models must be slower")
     return 1.0 / slope, mean_y - slope * mean_x
