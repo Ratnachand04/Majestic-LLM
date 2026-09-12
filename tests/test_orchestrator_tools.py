@@ -17,7 +17,8 @@ class CodePlanningCore(ReasoningCore):
 
     def plan(self, request: Request) -> Plan:
         return Plan(
-            steps=[Step(description="compute", target="code_exec", args={"code": str(request.content)})]
+            steps=[Step(description="compute", target="code_exec",
+                        args={"code": str(request.content)})]
         )
 
     def synthesize(
