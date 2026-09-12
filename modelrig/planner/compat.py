@@ -13,8 +13,8 @@ discover.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 from majestic.logging_utils import get_logger
 from modelrig.gates import GateResult, gate2_plan_feasibility
@@ -49,12 +49,12 @@ class PrecedentRecord:
 class PlanningResult:
     """What the planner produced, and how it got there."""
 
-    plan: Optional[BuildPlanIR]
+    plan: BuildPlanIR | None
     gate: GateResult
     path: str = "deterministic"           # deterministic | precedent | proposed | refused
     mutations: list[str] = field(default_factory=list)
-    refusal: Optional[Refusal] = None
-    outcome: Optional[core.PlanOutcome] = None
+    refusal: Refusal | None = None
+    outcome: core.PlanOutcome | None = None
 
     @property
     def admitted(self) -> bool:
@@ -68,9 +68,9 @@ class Planner:
         self,
         catalogue=None,
         profiler=None,
-        proposer: Optional[Callable[[SpecIR, object], BuildPlanIR]] = None,
-        outcome_predictor: Optional[OutcomePredictor] = None,
-        catalog: Optional[Catalog] = None,
+        proposer: Callable[[SpecIR, object], BuildPlanIR] | None = None,
+        outcome_predictor: OutcomePredictor | None = None,
+        catalog: Catalog | None = None,
         tier: Tier = Tier.COMMERCIAL,
         exploration_rate: float = 0.0,
     ) -> None:
