@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from majestic.logging_utils import get_logger
 from modelrig.buildspec import BuildSpec, ensure_valid
@@ -41,7 +41,7 @@ class BuildResult:
     build_id: str
     success: bool
     eval_report: dict[str, Any] = field(default_factory=dict)
-    artifact_path: Optional[str] = None
+    artifact_path: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     reason: str = ""
 
@@ -57,8 +57,8 @@ class Factory:
 
     def __init__(
         self,
-        registry: Optional[Registry] = None,
-        compiler: Optional[Compiler] = None,
+        registry: Registry | None = None,
+        compiler: Compiler | None = None,
         base_path: str | Path = "./registry",
     ) -> None:
         self.registry = registry or FileSystemRegistry(base_path)
