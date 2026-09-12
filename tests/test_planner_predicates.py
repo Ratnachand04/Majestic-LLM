@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from modelrig.ir import AbstentionPolicy, DataRights, SpecIR
+from modelrig.licence import Licence
 from modelrig.planner import costmodel
 from modelrig.planner.catalog import (
     CatalogError,
@@ -46,7 +47,6 @@ from modelrig.planner.predicates import (
     seed_floor,
     weight_bytes,
 )
-from modelrig.licence import Licence
 from modelrig.primitives import TaskPrimitive
 
 CAT = default_catalog()
