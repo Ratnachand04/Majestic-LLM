@@ -46,7 +46,8 @@ def _spec(description: str = "Classify support tickets by sentiment on an androi
             "data_rights": "customer_owned", "quality_gate": 0.80,
             "seed_data_count": 120, "offline_required": True,
             "seed_data_ref": "test://corpus", "latency_budget_ms": 30_000,
-            "expected_input_tokens": 120, "io_schema": {"label": "str"},
+            "expected_input_tokens": 120,
+            "io_schema": {"label": "str", "accept_unmeasured_latency": True},
         },
     ).spec
 
