@@ -1,0 +1,579 @@
+% Standalone manuscript. Compile with pdflatex twice, or tectonic.
+% No external bibliography, figures, private documents or shell escape required.
+% Prepared for private technical review; not submitted or peer reviewed.
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=24mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,booktabs,array,longtable}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\setlength{\emergencystretch}{2em}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,columns=fullflexible,frame=single}
+\newcommand{\sys}{\textsc{Majestic}}
+\newcommand{\code}[1]{\texttt{#1}}
+\title{Majestic: Evidence-Aware Compilation and Local Deployment of Task-Specific Models}
+\author{Majestic Research Project\\
+\small Private technical-review manuscript; author and affiliation to be finalized}
+\date{23 September 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+Deploying a task-specific model requires more than fitting parameters: the task,
+data, resource assumptions, evaluation protocol and executable artifact must agree.
+We describe \sys, a research system organizing these decisions around typed
+specifications, feasibility predicates, build plans, evidence records and local
+artifacts. Its architecture separates specification admissibility, planned
+feasibility and artifact evaluation. We report an implementation audit and a
+reproducible initial experiment on a deduplicated version of the public UCI SMS
+Spam Collection. Across three fixed train/test splits, a TF--IDF nearest-centroid
+baseline achieves 94.54\% mean accuracy and 88.94\% macro-F1, while a nearest-neighbor
+baseline achieves 97.19\% and 92.99\%, respectively. Packed four-bit centroid
+weights reduce weight storage by approximately eightfold but lower mean accuracy
+to 92.56\%; storage compression does not ensure inference acceleration. A
+separate planted-case experiment agrees with the expected verdicts for 48
+declared-effect workflow graphs. Three DistilBERT LoRA runs achieve 98.87\%
+mean accuracy and 97.36\% macro-F1. A separate seed-zero QLoRA run with NF4
+deployment achieves 99.13\% accuracy in a 73.84 MB deployment directory.
+The implementation records provenance separating executed models from
+analytical plans. These results establish a reproducible classification and
+systems baseline, not universal task coverage, mobile certification, production
+safety, or predictive validity of the planner. We specify the experiments needed
+to assess those broader hypotheses without treating proposed claims as results.
+\end{abstract}
+
+\section{Introduction}
+Organizations often need a model to perform a narrow task under practical
+constraints: classify a message, extract fields, transform text, retrieve a
+grounded answer, or choose an execution path. The desired output is usually an
+operational capability with known limitations, rather than a training checkpoint
+alone. A successful build therefore has several distinct obligations. The
+specification must describe the intended task; the data must support a meaningful
+evaluation; the chosen training method must actually execute; deployment must
+preserve the evaluated behavior; and any resource commitment must refer to
+appropriate evidence.
+
+\sys\ explores a compiler organization for this process. A front end elicits a
+typed specification. A planner enumerates supported configurations and records
+constraint failures. Data preparation, training and evaluation produce an
+artifact together with an evidence manifest. A registry tracks identity and
+recall, while a typed directed acyclic graph (DAG) expresses compound workflows.
+The useful analogy is an intermediate representation and checked transformations,
+not a new universal neural architecture.
+
+This paper makes three bounded contributions. First, it describes the contracts
+linking specifications, planned work, executed work and deployment evidence.
+Second, it documents concrete implementation failures that can invalidate those
+contracts and the corresponding repairs. Third, it supplies reproducible
+classification and static-analysis experiments, including unfavorable compression
+results. It does not establish priority over all previous systems or claim a new
+parameter-efficient learning algorithm.
+
+The current release contains two execution paths. A local studio demonstrates
+the specification-to-registry flow using an actual TF--IDF classifier. Its
+language-model plan is explicitly analytical. A separate factory executes PEFT
+sequence-classification training and HF-format export. Integrating that backend
+with every planner recipe remains future work. Treating these paths as a single
+fully validated universal factory would overstate the evidence.
+
+\section{Related work}
+Compiler infrastructure motivates explicit intermediate representations,
+verification and staged lowering. MLIR supports multiple levels of representation
+and extensible domain-specific transformations \cite{mlir}. \sys\ applies that
+organizational principle to model-building decisions and their evidence; it is
+not a replacement for tensor compilers or a demonstrated new compiler theory.
+
+LoRA freezes a pretrained model and learns low-rank parameter updates
+\cite{lora}. QLoRA combines low-rank adaptation with a quantized frozen base
+\cite{qlora}. These methods are dependencies of the proposed training layer.
+The distinction between training-time quantization and deployment quantization
+is an execution obligation, not a novel optimization algorithm. The practical
+backend follows the PEFT quantization workflow \cite{peft}. DistilBERT is a
+compact pretrained transformer suitable for a classification baseline
+\cite{distilbert}; adaptation of such a base must not be described as training
+a foundation model from scratch.
+
+Hardware-aware specialization is already a substantial research area.
+Once-for-All decouples supernetwork training from architecture specialization
+under deployment constraints \cite{ofa}. \sys\ instead proposes selecting and
+adapting catalogued models for a task and preserving the assumptions behind the
+selection. Multi-adapter serving is also prior work: S-LoRA provides specialized
+memory management and execution for many concurrent adapters \cite{slora}.
+The presence of registry or adapter abstractions in \sys\ does not reproduce
+those performance results, especially on mobile devices.
+
+Super-NaturalInstructions demonstrates the breadth of instruction-described NLP
+tasks \cite{sni}; it does not validate \sys's proposed primitive taxonomy.
+Indirect prompt injection motivates modeling untrusted inputs and privileged
+sinks \cite{injection}. Static effect declarations can support conservative
+reachability checks, but cannot establish that an arbitrary handler or model is
+safe. Finally, binomial uncertainty requires care near boundary probabilities
+and at small sample sizes \cite{binomial}. We report Wilson intervals for
+classification accuracy rather than treating a point estimate as a guarantee.
+
+\section{System model and contracts}
+Let a specification be
+\begin{equation}
+s=(\tau,\mathcal{I},\mathcal{O},D,r,d,b,q),
+\end{equation}
+where $\tau$ is a task primitive, $\mathcal{I}$ and $\mathcal{O}$ are input and
+output contracts, $D$ identifies data, $r$ records declared rights, $d$ describes
+the deployment target, $b$ collects budgets, and $q$ is an acceptance target.
+A build plan $p$ records the selected base, adaptation method, hyperparameters,
+quantization, runtime and evaluation recipe. An artifact record $a$ binds the
+executed model to provenance and evaluation observations.
+
+Three checks have deliberately different meanings:
+\begin{align}
+G_1(s)&:\text{the request is admissible under the declared policy},\\
+G_2(s,p)&:\text{the plan meets modeled constraints},\\
+G_3(s,p,a)&:\text{the artifact carries the required evaluation evidence}.
+\end{align}
+Passing $G_2$ is not a measurement of latency or task quality. Passing a local
+quality threshold in $G_3$ is not independent safety certification. The scope
+and provenance of each observation must travel with its verdict.
+
+\begin{figure}[ht]
+\centering
+\small
+\fbox{\parbox{0.93\linewidth}{\centering
+FORGE $\rightarrow$ Spec IR $\rightarrow$ $G_1$ $\rightarrow$ PLANNER
+$\rightarrow$ Build Plan IR $\rightarrow$ $G_2$\\[5pt]
+DATA FACTORY $\rightarrow$ TRAINER $\rightarrow$ PROVING GROUND
+$\rightarrow$ $G_3$ $\rightarrow$ ARTIFACT\\[5pt]
+REGISTRY $\leftrightarrow$ FABRIC local execution and lifecycle controls}}
+\caption{Proposed contract structure. The current studio and neural factory
+implement different subsets of this flow; their execution provenance is explicit.}
+\end{figure}
+
+\subsection{FORGE and the primitive catalogue}
+FORGE represents requirements as slots and asks questions when an answer could
+change a downstream planning decision, when a required value is missing, or
+when the request is contested. Planner sensitivity is useful because uncertainty
+in a slot need not imply uncertainty in the chosen plan. However, the utility of
+an interview and any attrition coefficient require a human study.
+
+The design documents propose a closed taxonomy, but the implementation and the
+newer taxonomy document differ. The implementation includes extraction,
+classification, summarization, rewriting, generation, answering, routing and
+tool calls. The newer document groups transformation differently and adds
+ranking. We therefore treat the taxonomy as provisional. The current local
+compiler executes classification and routing-label tasks; unsupported execution
+is refused. Neither the catalogue's size nor its presence in code establishes
+coverage of real business requests.
+
+\subsection{Planner and resource reasoning}
+The planner evaluates candidate configurations against memory, latency,
+tokenizer compatibility, data sufficiency, declared licensing restrictions,
+offline requirements and build cost. A useful memory accounting identity is
+\begin{equation}
+M_{\mathrm{total}}=M_{\mathrm{weights}}+M_{\mathrm{KV}}+
+M_{\mathrm{runtime}}+M_{\mathrm{adapters}}.
+\end{equation}
+For a decoder with $L$ layers, $h_{kv}$ key/value heads, head dimension $d_h$,
+context length $T$, batch size $B$ and $w$ bytes per cache element,
+\begin{equation}
+M_{\mathrm{KV}}=2Lh_{kv}d_hTBw.
+\end{equation}
+These equations require architecture and implementation parameters consistent
+with the actual backend. Similarly, document workloads require both prefill
+and decode time:
+\begin{equation}
+t_{\mathrm{request}}\approx n_{\mathrm{in}}/v_{\mathrm{prefill}}
++n_{\mathrm{out}}/v_{\mathrm{decode}}+t_{\mathrm{overhead}}.
+\end{equation}
+Unmeasured rates are estimates. A profile containing example numbers is marked
+as assumed, and cannot become measured merely by passing through an interview.
+No mobile latency, thermal or energy result is reported in this study.
+
+The planner's soft quality and cost priors remain unvalidated. A refusal based
+on a conservative estimate may reject a build that would succeed. Consequently,
+the accuracy of refusal is an empirical question requiring both accepted and
+refused configurations to be executed independently of the prediction.
+
+\subsection{Data preparation and training}
+The data layer distinguishes real examples, label-preserving augmentation and
+synthesis. Additional generated rows are not additional independent human
+observations. Splitting and contamination controls must precede augmentation,
+and any transformation claimed to preserve a label needs domain-specific checks.
+
+For the public-data factory experiment, normalized duplicate input messages are
+removed before a stratified split. A conflicting normalized input is refused by
+the general loader. The benchmark ingestion procedure discards entire conflicting
+groups and records their number; no such group occurred in the downloaded data.
+Vocabulary and inverse-document frequencies are fitted on training inputs only.
+
+The neural backend resolves a Hub reference to a specific revision, uses a
+locally loaded tokenizer, fits PEFT adapters and saves the trained adapter.
+QLoRA requests use an NF4 base and k-bit preparation. Merging reloads an
+unquantized base rather than adding adapter deltas directly to NF4 weights.
+Deployment quantization, when selected, is performed separately on the merged
+model. Evaluation runs after that operation, and export includes tokenizer and
+model files needed for local inference. Unsupported runtime or distillation
+requests fail explicitly instead of being recorded as successful no-ops.
+
+\subsection{Evaluation and artifact identity}
+Classification accuracy is
+\begin{equation}
+\hat q=\frac{1}{n}\sum_{i=1}^n\mathbf{1}[\hat y_i=y_i].
+\end{equation}
+The two-sided 95\% Wilson interval is
+\begin{equation}
+\frac{\hat q+z^2/(2n)\ \pm\ z\sqrt{\hat q(1-\hat q)/n+z^2/(4n^2)}}
+{1+z^2/n},\qquad z=1.96.
+\end{equation}
+A point estimate above a target with a lower interval endpoint below it is
+reported as provisional. This interval concerns the specified sampling model;
+it does not remove domain shift, dependence or model-selection bias. Fractional
+field-F1 scores must not be rounded into binomial success counts. The local
+task axis therefore uses exact-match correctness.
+
+The studio reports seven evaluation axes, including behavioral, regression,
+privacy, safety, judge and calibration checks. The present safety/privacy probes
+are limited canaries; the default judge is a lexical proxy. They do not justify
+claims about rare failure rates or human agreement. Missing model confidence is
+reported as unmeasured. Using correctness labels themselves as confidence would
+leak evaluation outcomes and manufacture an artificially perfect calibration
+score; this behavior was removed during the audit.
+
+For reference predictions $u_i$ and compressed predictions $v_i$, define
+\begin{equation}
+\phi=\frac{1}{n}\sum_i\mathbf{1}[u_i\ne v_i].
+\end{equation}
+For exact-match accuracy, $|\hat q(u)-\hat q(v)|\leq\phi$: a row's correctness
+can change only when its prediction changes, so summing the per-row absolute
+differences proves the inequality. The converse does not hold; improvements and
+regressions can cancel. This establishes why flips provide different descriptive
+information, not that flips predict field failure better than accuracy delta.
+
+Artifact identity includes actual tensor contents and metadata rather than only
+row counts or a planned model name. The cache additionally incorporates supplied
+corpus contents, so reusing a data URI cannot silently reuse a different model.
+Classifier serving checks the stored tensor digest and lifecycle status. Hashes
+detect accidental changes relative to the manifest; without signatures and a
+trusted origin they are not remote attestation or protection from an attacker
+who can replace both weights and metadata.
+
+\subsection{Fabric and the scope of static guarantees}
+Fabric models a workflow as a typed DAG $G=(V,E)$ with declared network effects,
+untrusted sources and privileged sinks. A strict policy rejects an active
+network node in an offline graph and a tainted path into a privileged operation.
+In an adjacency-list implementation, propagation over a topological order needs
+$O(|V|+|E|)$ graph operations. The prototype contains repeated edge-list scans,
+so that asymptotic bound is a property of the algorithmic formulation, not a
+demonstrated implementation performance bound.
+
+Static conclusions are conditional on complete declarations and trustworthy
+handlers. The runtime is not a kernel-level network sandbox. A finite output
+alphabet may bound channel capacity by $\log_2|\mathcal{O}|$, but even one bit
+can authorize a dangerous action. Thus a constrained classifier is not a general
+semantic sanitizer. The benchmark uses the strict zero-taint tolerance and does
+not test declassification or bounded-capacity authorization policies.
+
+\section{Implementation audit}
+The audit identified several ways to obtain plausible reports without the
+corresponding evidence. Table~\ref{tab:audit} records the main corrections.
+These defects illustrate why interface-level success and passing unit tests are
+insufficient for validating a research system.
+
+\begin{table}[ht]
+\centering\small
+\begin{tabular}{p{0.42\linewidth}p{0.48\linewidth}}
+\toprule
+Failure mode & Implemented correction \\
+\midrule
+Assumed Android figures labeled measured & Preserve profile source through elicitation \\
+Planned language model reported as executed & Store the actual centroid backend and analytical-plan distinction \\
+Correctness used as confidence & Require output-derived confidence or mark unavailable \\
+Artifact hash derived from counts & Hash trained tensor contents and validate on load \\
+Recalled weights loaded directly & Enforce lifecycle checks during inference \\
+Evaluation before quantization & Evaluate and gate the deployed numerical representation \\
+QLoRA/compression accepted as no-ops & Execute real backend operations or reject unsupported requests \\
+Duplicate inputs crossing splits & Normalize, deduplicate and stratify before fitting \\
+Nested runtime packages absent from wheel & Discover and include packages and deployment resources \\
+Graph identity omits resource metadata & Bind graph identity to full node declarations \\
+\bottomrule
+\end{tabular}
+\caption{Corrections to executable behavior and reported evidence.}
+\label{tab:audit}
+\end{table}
+
+\section{Experimental methodology}
+\subsection{Data and protocol}
+We downloaded the UCI SMS Spam Collection \cite{sms}. The retrieved archive
+contains 5,574 parsed rows. Case-folded whitespace-normalized deduplication removes
+415 rows, leaving 5,159 unique inputs: 4,517 ham and 642 spam. The archive digest
+and exact processed-file digest are recorded in the released local evidence.
+This public historical English-language dataset is a test case, not a sample of
+the user's production domain.
+
+We use fixed random seeds $0,1,2$ and an 80/20 per-label split, yielding 4,128
+training and 1,031 test examples per run. The conditions were fixed before the
+benchmark: majority prediction, nearest-centroid and $k=3$ nearest-neighbor
+classification. Both learned baselines use training-fitted normalized TF--IDF.
+For each learned model, we evaluate float32, signed int8 and packed int4 storage.
+This produces 21 reported condition--split results. There is no tuning or repair
+against the reported test labels in this experiment.
+
+We report accuracy, macro-F1, confusion matrices, per-split Wilson accuracy
+intervals, prediction flip rate and weight-storage ratio. Macro-F1 gives equal
+weight to both classes, making the weak majority baseline visible despite its
+high accuracy. The three splits overlap, so their average is a descriptive
+summary; they are not three independent replications suitable for an unqualified
+significance test.
+
+\subsection{Runtime protocol}
+The baseline experiment ran locally with Python 3.12.0 and NumPy 2.5.1 on
+Windows 11. Training time covers feature fitting and model construction.
+Inference timings measure one input per call for the first 32 test messages
+after prior batch inference. The table averages per-split medians. It excludes
+process startup and file loading, and is neither a service-level percentile nor
+a sustained thermal measurement. No phone was used. Quantized NumPy inference
+dequantizes stored weights during prediction, an implementation detail that
+strongly affects the larger nearest-neighbor matrix.
+
+\subsection{Planted graph experiment}
+We construct chains of lengths $1,2,4,8,16,32$ crossed with binary choices for
+an untrusted source, a declared network effect and a privileged sink. The 48
+cases have expected verdict
+\begin{equation}
+\mathrm{safe}=\neg\mathrm{network}\ \land\
+\neg(\mathrm{untrusted}\land\mathrm{privileged}).
+\end{equation}
+This is a deterministic planted-case verification experiment. It is not an
+independent real-workflow corpus or a comparison against runtime-only detection.
+
+\section{Results}
+\begin{table}[ht]
+\centering\small
+\begin{tabular}{llrrrr}
+\toprule
+Method & Stored precision & Accuracy (\%) & Macro-F1 (\%) & Flips (\%) & Median ms \\
+\midrule
+Majority & --- & 87.58 & 46.69 & --- & --- \\
+Centroid & float32 & 94.54 & 88.94 & 0.00 & 0.99 \\
+Centroid & int8 & 94.44 & 88.80 & 0.23 & 1.08 \\
+Centroid & int4 & 92.56 & 85.51 & 2.81 & 1.11 \\
+3-NN & float32 & 97.19 & 92.99 & 0.00 & 4.92 \\
+3-NN & int8 & 97.12 & 92.82 & 0.06 & 111.81 \\
+3-NN & int4 & 97.06 & 92.67 & 0.71 & 217.69 \\
+\bottomrule
+\end{tabular}
+\caption{Means across three fixed splits. Timing is the mean of per-split warm
+single-input medians. Flips are relative to the corresponding float32 model.
+Weight precision describes storage, not integer-only computation.}
+\label{tab:results}
+\end{table}
+
+Both learned baselines outperform the majority classifier, particularly in
+macro-F1. Four-bit centroid storage loses approximately 1.97 percentage points
+of mean accuracy relative to float32 and changes 2.81\% of answers. This is an
+observable quality/storage trade-off, not evidence that four-bit precision is
+universally optimal. The nearest-neighbor classifier is more accurate on this
+dataset but retains a training-example matrix, with correspondingly greater
+storage and privacy considerations.
+
+The large latency increases for quantized nearest-neighbor inference expose an
+implementation limitation: reconstructing its weight matrix on each call costs
+more than the float32 matrix-vector operation. Packed storage therefore cannot
+be advertised as an inference-speed improvement in this backend. Caching a
+dequantized matrix or using integer kernels would change both timing and resident
+memory, and requires a new measurement.
+
+All 48 planted graphs match the expected verdicts. This establishes coverage
+of these templates and declared effects only. It does not quantify performance
+on real user graphs, prove handler isolation, or establish superiority over
+runtime testing.
+
+% NEURAL_RESULTS_BEGIN
+\subsection{Pretrained transformer adaptation}
+We execute three LoRA runs using the same split seeds $0,1,2$, and one QLoRA
+run using seed zero. Each run uses 4,128 training examples and 1,031 test
+examples. The base is \code{distilbert/distilbert-base-uncased}, resolved to
+the following revision:
+\begin{center}\small\ttfamily
+12040accade4e8a0f71eabdb258fecc2e7e948be
+\end{center}
+Training uses three
+epochs, batch size 16, learning rate $2\times10^{-4}$, rank 8, scaling parameter
+16, adapter dropout 0.05, and query/value projections as the adapter targets.
+Inputs are truncated to 128 tokens. The sequence-classification head is trained
+alongside the adapters. Hyperparameters are fixed across these runs; neither
+early stopping nor model selection uses the reported test labels.
+
+LoRA uses a BF16 base on the GPU. QLoRA uses an NF4 base with double
+quantization and gradient checkpointing. Its adapter and classification head
+are subsequently loaded onto a fresh unquantized base before merging.
+Deployment quantization is a separate NF4 operation, followed by evaluation
+and local export. Embeddings and classification-head modules remain outside
+the four-bit linear-weight conversion. An initial QLoRA attempt failed while
+initializing a quantized classifier head; excluding those head modules fixed
+the loader failure before any successful QLoRA training. This was an
+implementation correction, not a hyperparameter search on accuracy.
+
+\begin{table}[ht]
+\centering\small
+\begin{tabular}{lrrrr}
+\toprule
+Training / deployment & Seed & Accuracy (\%) & Macro-F1 (\%) & Train (s) \\
+\midrule
+LoRA / unquantized & 0 & 99.13 & 97.99 & 34.03 \\
+LoRA / unquantized & 1 & 98.93 & 97.49 & 37.51 \\
+LoRA / unquantized & 2 & 98.55 & 96.60 & 37.96 \\
+QLoRA / NF4 & 0 & 99.13 & 97.99 & 93.22 \\
+\bottomrule
+\end{tabular}
+\caption{Measured DistilBERT adaptation. Training times are Trainer-reported
+loop durations; downloads, loading, merge, quantization and evaluation are excluded.}
+\label{tab:neural}
+\end{table}
+
+The mean LoRA accuracy is 98.87\% and mean macro-F1 is 97.36\%.
+Seed-zero LoRA produces 1,022 correct predictions, with a 95\% Wilson accuracy
+interval of $[98.35,99.54]\%$. It is the portable review artifact by a fixed
+seed-zero convention, rather than selection of the best observed score.
+The unquantized deployment directory occupies 134,867,669 bytes; QLoRA's NF4
+deployment occupies 73,841,388 bytes, including tokenizer and configuration.
+The latter changes two predictions relative to its own merged unquantized
+checkpoint: an answer-flip rate of $2/1031=0.194\%$. These are not flips against
+the separate LoRA run. The quantized checkpoint's weight-file compression ratio
+is 1.84, not the idealized eightfold ratio of fully quantized float32 weights.
+
+Runs use an NVIDIA GeForce RTX 4060 Laptop GPU, CUDA 12.8, PyTorch
+2.11.0+cu128, Transformers 4.57.6, PEFT 0.18.1 and bitsandbytes 0.50.2
+under Python 3.12.0 on Windows 11. The saved reports include predictions,
+gold labels, training telemetry and actual model revision. Locally initialized
+tiny-model integration tests separately check train/save/reload mechanics.
+The three split replicates overlap, so their mean is descriptive rather than
+three independent datasets. One QLoRA run establishes executable behavior and
+a task-specific result, not a general accuracy, memory or speed advantage.
+We did not measure neural mobile inference, peak GPU memory or energy.
+% NEURAL_RESULTS_END
+
+\section{Research claim ledger}
+The architecture motivates a larger research program. Table~\ref{tab:claims}
+prevents that program from being mistaken for this paper's results. The thresholds
+originate in the supplied plan; this manuscript does not retroactively claim an
+external preregistration.
+
+\begin{longtable}{p{0.08\linewidth}p{0.43\linewidth}p{0.40\linewidth}}
+\toprule
+ID & Proposed hypothesis & Evidence still required \\
+\midrule\endhead
+C1 & At least 80\% of real requests reduce to the proposed primitives. & Stratified real-request corpus, two independent coders, coverage and inter-rater agreement. \\
+C2 & Refusal precision $\geq0.75$ and recall $\geq0.70$. & Execute accepted and refused boundary builds; report per soft predicate without inflating results using trivial hard refusals. \\
+C3 & Seed-anchored amplification improves quality by at least five points. & Matched-volume multi-task ablations with fixed data splits and multiple training seeds. \\
+C4 & Flip rate adds predictive value for field failure. & Independent field-like labels and model-level analysis beyond accuracy delta; the current flip measurements are descriptive. \\
+C5 & Static analysis catches violations runtime testing misses. & Broader adversarial DAG corpus and matched runtime comparator. Current evidence is 48 planted chain cases. \\
+C6 & Build-history learning raises first-attempt success by 15 points. & Accumulated real build outcomes, held-out specifications and nearest-neighbor/rule baselines. \\
+C7 & Twenty adapters share a mobile base with swaps below 200 ms. & Physical-device adapter, sustained throughput, thermal and battery measurements. \\
+\bottomrule
+\caption{Unvalidated research hypotheses and their next falsifiable tests.}
+\label{tab:claims}
+\end{longtable}
+
+\section{Discussion and limitations}
+The implementation supports an evidence-oriented workflow, but the evidence
+remains narrow. A single historical binary dataset cannot establish extraction,
+generation, retrieval, ranking or tool-use quality. Duplicate removal prevents
+one form of leakage, while semantically related messages may still cross splits.
+Label quality and historical collection biases remain. Repeated inspection of
+test outcomes during subsequent development would invalidate their use as an
+untouched final evaluation set.
+
+The current studio canary suites are not production safety or privacy audits.
+No calibrated model judge or comprehensive regression benchmark was run. Registry
+privacy depends on caller identity, storage isolation and operational controls;
+local ownership checks alone are insufficient for a multi-tenant service. The
+local API is intended for a single user on loopback and is not a hardened public
+deployment. Artifact digests provide integrity relative to stored metadata,
+not cryptographic proof of trustworthy execution.
+
+Device feasibility combines arithmetic with assumptions. Architecture parameters,
+effective precision, concurrency, runtime allocation and workload length can
+all change the result. Memory formulas support auditing under their assumptions,
+not unrestricted claims of sound refusal. No economic results, user adoption,
+willingness to pay, legal determination or competitive advantage were measured.
+The business motivation should therefore be evaluated separately from software
+correctness and model accuracy.
+
+The full system still requires alignment of the taxonomy, a common execution
+contract between planner and neural backend, independent validation of all
+supported task recipes, real device measurement, stronger security boundaries
+and completion of the research program. These are explicit limitations of the
+present release rather than measurements implied by the diagrams.
+
+\section{Reproducibility, data and confidentiality}
+The entry point \code{python -m modelrig.review prepare-sms} downloads the public
+dataset and records cleaning provenance. \code{python -m modelrig.review benchmark}
+recreates the baseline experiment and graph checks. The JSON evidence contains
+per-run metrics, sample counts, split digests, tensor digests and environment
+information. The standalone LaTeX file contains its own references and figure.
+
+The processed dataset SHA-256 is
+\begin{center}\small\ttfamily
+80f4c4d8c2ef4d98e51d65911867122643275ece6fd9c33e77f268f43cab21cf
+\end{center}
+The neural configuration is \code{configs/specs/sms\_lora.yaml}; it fixes the
+training seed, split, adapter rank, target modules, learning rate and epoch count.
+Model revisions and training telemetry are recorded during execution. Complete
+bitwise reproducibility across devices and library versions is not asserted.
+
+The provided confidential patent draft is not a source, dataset or attachment
+of this manuscript. Its text was not sent to a research or publication service.
+This file is prepared for private review, and no public repository push or
+submission is part of the experiment. Author identity and affiliation must be
+finalized by the project owner before any submission.
+
+\section{Conclusion}
+\sys\ provides an executable setting for investigating whether task-specific
+model construction benefits from compiler-style contracts and explicit evidence.
+The present results establish reproducible classification baselines and actual
+pretrained-transformer adaptation, demonstrate
+storage/quality/runtime trade-offs and validate limited declared-effect graph
+cases. The audit shows that planned capabilities, measured behavior and reported
+certification must be kept distinct. Broader claims about refusal prediction,
+task coverage, mobile operation and compounding build-history learning remain
+testable hypotheses requiring additional data and experiments.
+
+\begin{thebibliography}{99}
+\bibitem{mlir} C. Lattner et al.
+\emph{MLIR: A Compiler Infrastructure for the End of Moore's Law}. 2020.
+\url{https://arxiv.org/abs/2002.11054}.
+\bibitem{lora} E. J. Hu et al.
+\emph{LoRA: Low-Rank Adaptation of Large Language Models}. 2021.
+\url{https://arxiv.org/abs/2106.09685}.
+\bibitem{qlora} T. Dettmers, A. Pagnoni, A. Holtzman, and L. Zettlemoyer.
+\emph{QLoRA: Efficient Finetuning of Quantized LLMs}. 2023.
+\url{https://arxiv.org/abs/2305.14314}.
+\bibitem{peft} Hugging Face.
+\emph{PEFT documentation: Quantization}. Accessed September 2026.
+\url{https://huggingface.co/docs/peft/developer_guides/quantization}.
+\bibitem{distilbert} V. Sanh, L. Debut, J. Chaumond, and T. Wolf.
+\emph{DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter}. 2019.
+\url{https://arxiv.org/abs/1910.01108}.
+\bibitem{ofa} H. Cai, C. Gan, T. Wang, Z. Zhang, and S. Han.
+\emph{Once-for-All: Train One Network and Specialize it for Efficient Deployment}.
+ICLR, 2020. \url{https://arxiv.org/abs/1908.09791}.
+\bibitem{slora} Y. Sheng et al.
+\emph{S-LoRA: Serving Thousands of Concurrent LoRA Adapters}. 2023.
+\url{https://arxiv.org/abs/2311.03285}.
+\bibitem{sni} Y. Wang et al.
+\emph{Super-NaturalInstructions: Generalization via Declarative Instructions on
+1600+ NLP Tasks}. 2022. \url{https://arxiv.org/abs/2204.07705}.
+\bibitem{injection} K. Greshake et al.
+\emph{Not what you've signed up for: Compromising Real-World LLM-Integrated
+Applications with Indirect Prompt Injection}. 2023.
+\url{https://arxiv.org/abs/2302.12173}.
+\bibitem{binomial} L. D. Brown, T. T. Cai, and A. DasGupta.
+Interval estimation for a binomial proportion.
+\emph{Statistical Science}, 16(2):101--133, 2001.
+\url{https://doi.org/10.1214/ss/1009213286}.
+\bibitem{sms} T. A. Almeida and J. M. G. Hidalgo.
+\emph{SMS Spam Collection}. UCI Machine Learning Repository, 2011.
+\url{https://doi.org/10.24432/C5CC84}.
+\end{thebibliography}
+\end{document}
