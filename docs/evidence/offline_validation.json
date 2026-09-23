@@ -1,0 +1,62 @@
+{
+  "environment": {
+    "python": "3.12.0",
+    "os": "Windows-11-10.0.26200-SP0",
+    "packages": {
+      "numpy": "2.5.1",
+      "torch": "2.11.0+cu128",
+      "transformers": "4.57.6",
+      "peft": "0.18.1",
+      "bitsandbytes": "0.50.2",
+      "pytest": "9.1.1"
+    },
+    "cuda_available": true,
+    "cuda_version": "12.8",
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU"
+  },
+  "hub_offline": true,
+  "scope": "local model reload and API parity, not an accuracy benchmark",
+  "runs": [
+    {
+      "build_id": "sms_spam-lora-916188c8f1a69177126c1dd9",
+      "manifest_verified": true,
+      "offline_reload": true,
+      "api_matches_direct": true,
+      "smoke_predictions": [
+        "ham",
+        "ham"
+      ]
+    },
+    {
+      "build_id": "sms_spam-lora-05570710f90c0662f841d428",
+      "manifest_verified": true,
+      "offline_reload": true,
+      "api_matches_direct": true,
+      "smoke_predictions": [
+        "ham",
+        "ham"
+      ]
+    },
+    {
+      "build_id": "sms_spam-lora-5ecbcc0dc970fe853f3927e4",
+      "manifest_verified": true,
+      "offline_reload": true,
+      "api_matches_direct": true,
+      "smoke_predictions": [
+        "ham",
+        "ham"
+      ]
+    },
+    {
+      "build_id": "sms_spam-qlora-a5512e8be785c14da0c986e0",
+      "manifest_verified": true,
+      "offline_reload": true,
+      "api_matches_direct": true,
+      "smoke_predictions": [
+        "ham",
+        "spam"
+      ]
+    }
+  ],
+  "portable_verified": true
+}
