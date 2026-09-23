@@ -17,8 +17,8 @@ class DefaultCompiler(Compiler):
     """Standard five-stage pipeline; compression is dropped when disabled."""
 
     def compile(self, spec: BuildSpec) -> list[str]:
-        planes = ["data", "training", "eval"]
+        planes = ["data", "training"]
         if spec.quantization != "none":
             planes.append("compression")
-        planes.append("export")
+        planes.extend(["eval", "export"])
         return planes
