@@ -1,0 +1,20 @@
+{
+  "wheel": "majestic_llm-0.1.0-py3-none-any.whl",
+  "imports_from_installed_target": [
+    "modelrig.pipeline",
+    "modelrig.training_hf",
+    "majestic.fabric.graph",
+    "modelrig.forge.core",
+    "api.app",
+    "cli.main"
+  ],
+  "api_and_frontend": true,
+  "private_files_excluded": true,
+  "paper_pages": 10,
+  "paper_unresolved_references": false,
+  "preview_pages": [
+    1,
+    7,
+    10
+  ]
+}
