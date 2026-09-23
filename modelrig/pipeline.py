@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -248,10 +248,7 @@ class MajesticCompiler:
             reference_predictions=reference_preds,
             quantised_predictions=quantised_preds,
             calibration=calibration,
-            confidences=[
-                1.0 if p == g else 0.0
-                for p, g in zip(quantised_preds, gold, strict=True)
-            ],
+            confidences=classifier.predict_confidence(quantised, held_texts),
             correct=[p == g for p, g in zip(quantised_preds, gold, strict=True)],
         )
 
@@ -262,6 +259,7 @@ class MajesticCompiler:
             training_texts=[t for t, _ in bundle.train][:20],
             reference_predictions=reference_preds,
             post_quantisation=True,
+            confidences=classifier.predict_confidence(quantised, held_texts),
         )
 
         # Predicted per-request latency for the latency filter in selection.
@@ -344,6 +342,9 @@ class MajesticCompiler:
         ends. It is observation only: the compile's behaviour, its result, and
         its refusals are identical whether or not anyone is listening.
         """
+        # Bind the cache to the bytes actually supplied, even if a caller reuses a URI.
+        spec = replace(spec, seed_data_ref=(spec.seed_data_ref or "inline")
+                       + "#" + content_hash(corpus))
         result = CompileResult(spec=spec)
         tel = _Telemetry(progress)
         result.stages = tel.events
@@ -368,6 +369,7 @@ class MajesticCompiler:
         if use_cache:
             cached = self.registry.lookup(spec)
             if cached is not None:
+                load_cartridge_model(cached.id, self.registry.base_path)
                 result.admitted = True
                 result.cache_hit = True
                 result.cartridge = cached
@@ -400,6 +402,12 @@ class MajesticCompiler:
         )
 
         # --- DATA FACTORY ------------------------------------------------- #
+        if spec.task_primitive.value not in ("classify", "route"):
+            result.refusal = (
+                "the local centroid compiler executes classification only; this primitive "
+                "needs a trained task-specific backend and independent evaluation"
+            )
+            return result
         result.stage_reached = "data"
         tel.start("data", f"{len(corpus)} seed examples")
         try:
@@ -507,23 +515,32 @@ class MajesticCompiler:
         eval_report = card.to_eval_report()
         eval_report["candidates"] = selection.comparison_table()
         eval_report["selection_rationale"] = selection.rationale
+        eval_report["execution"] = {
+            "backend": "tfidf_centroid", "runtime": "numpy", "training": "centroid_fit",
+            "planned_base_executed": False, "device_measured": False,
+            "scope": "local classifier demonstration; neural plan is analytical only",
+        }
 
         grammar = compile_for_spec(spec.task_primitive, spec.io_schema)
         artefact = ArtefactIR(
             plan_hash=plan.hash,
             spec_hash=spec.hash,
-            adapter_blob_hash=content_hash(
-                {"labels": bundle.labels, "train": len(bundle.train), "plan": plan.hash}
-            ),
-            quantised_blob_hash=content_hash(
-                {"q": winner.compression, "plan": plan.hash}
-            ),
+            adapter_blob_hash=classifier.model_digest(winner.model),
+            quantised_blob_hash=classifier.model_digest(winner.model),
             grammar_blob=grammar.gbnf if grammar else plan.grammar_ref,
             model_card=build_model_card(spec, plan, eval_report),
             eval_certificate=eval_report,
             licence_chain=chain.as_record(),
         )
         result.artefact = artefact
+        artefact.model_card["execution"] = eval_report["execution"]
+        artefact.model_card["planned_base"] = plan.base_ref
+        artefact.model_card["base_model"] = "majestic/tfidf-centroid-v1"
+        artefact.model_card["training_method"] = "centroid_fit"
+        artefact.model_card["target_runtime"] = "numpy"
+        artefact.model_card["quantisation"] = f"symmetric_{plan.bit_width}bit"
+        artefact.model_card["teacher"] = None
+        artefact.model_card["distillation"] = "none"
 
         gate3 = gate3_artefact_certification(artefact, spec, eval_report)
         result.gates.append(gate3)
@@ -550,11 +567,13 @@ class MajesticCompiler:
         cartridge = cartridge_from_artefact(
             artefact, spec, plan, adapter_bytes=winner.compression.get("comp_bytes", 0)
         )
+        cartridge.base_ref = "majestic/tfidf-centroid-v1"
         result.cartridge = cartridge
         # The spec travels with the cartridge so the registry can record who
         # owns it and whether its corpus is shareable. Without it the entry is
         # admitted but never served from the cache — the safe default.
-        result.cartridge_id = self.registry.admit(cartridge, spec=spec)
+        cartridge.provenance["weights_digest"] = classifier.model_digest(winner.model)
+        result.cartridge_id = cartridge.id
 
         # --- the weights themselves ---------------------------------------- #
         # A certificate that points at no weights is not a deliverable. The
@@ -568,6 +587,7 @@ class MajesticCompiler:
             weight_bytes = sum(f.stat().st_size for f in weights_dir.iterdir())
             logger.info("compile: wrote weights to %s", weights_dir)
 
+        self.registry.admit(cartridge, spec=spec, base_bytes=0)
         result.admitted = True
         tel.done(
             "registry",
@@ -593,6 +613,10 @@ def load_cartridge_model(cartridge_id: str, registry_path: str | Path = "./regis
     the weights are *the artefact that certificate describes*. Serving needs
     both — a manifest alone cannot predict anything.
     """
+    import re
+
+    if not re.fullmatch(r"[a-f0-9]{8,64}", cartridge_id):
+        raise ValueError("invalid cartridge id")
     weights_dir = Path(registry_path) / "weights" / cartridge_id
     if not weights_dir.is_dir():
         raise FileNotFoundError(
@@ -600,7 +624,16 @@ def load_cartridge_model(cartridge_id: str, registry_path: str | Path = "./regis
             "manifest may have been admitted by an older build that discarded "
             "the model — rebuild it to produce a servable artefact"
         )
-    return classifier.load_model(weights_dir)
+    cart = CartridgeRegistry(registry_path).get(cartridge_id)
+    if not cart.servable:
+        raise ValueError("cartridge is recalled or is not servable")
+    model = classifier.load_model(weights_dir)
+    expected = cart.provenance.get("weights_digest")
+    if not expected:
+        raise ValueError("legacy cartridge lacks tensor integrity evidence; rebuild it")
+    if classifier.model_digest(model) != expected:
+        raise ValueError("cartridge weight integrity check failed")
+    return model
 
 
 def predict_with_cartridge(
