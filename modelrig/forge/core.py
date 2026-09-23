@@ -292,7 +292,7 @@ class Interviewer:
         if not profile:
             return []
         known["device_profile"] = profile
-        known["profile_source"] = ProfileSource.PROBE
+        known["profile_source"] = ProfileSource(profile.get("source", "assumed"))
         return list(slot_table.PROBED) + ["target.latency_budget_ms(bounded)"]
 
     # -- §8 step 3: derive everything derivable ---------------------------- #
