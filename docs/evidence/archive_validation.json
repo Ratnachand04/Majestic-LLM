@@ -1,0 +1,30 @@
+{
+  "archive_entries": 228,
+  "crc_valid": true,
+  "patent_inputs_excluded": true,
+  "fresh_extraction_inference": [
+    {
+      "model": "sms_specialist",
+      "cpu_only": true,
+      "offline_inference": {
+        "predictions": [
+          "ham"
+        ]
+      }
+    },
+    {
+      "model": "sms_specialist_nf4",
+      "cpu_only": false,
+      "offline_inference": {
+        "predictions": [
+          "ham"
+        ]
+      }
+    }
+  ],
+  "portable_import": {
+    "build_id": "sms_spam-lora-916188c8f1a69177126c1dd9",
+    "artifact_path": "D:\\NMIMS\\SEM-VII\\CAPSTONE\\Majestic_LLM\\outputs\\release_smoke\\registry\\sms_spam-lora-916188c8f1a69177126c1dd9"
+  },
+  "scope": "fresh archive extraction using preinstalled ML dependencies"
+}
