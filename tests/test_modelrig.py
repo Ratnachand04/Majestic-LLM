@@ -31,7 +31,7 @@ def test_validate_spec_errors():
 # --- compiler ----------------------------------------------------------- #
 def test_compiler_full_pipeline():
     spec = BuildSpec(task="t", base_model="b", method=TrainingMethod.CENTROID)
-    assert DefaultCompiler().compile(spec) == ["data", "training", "eval", "compression", "export"]
+    assert DefaultCompiler().compile(spec) == ["data", "training", "compression", "eval", "export"]
 
 
 def test_compiler_skips_compression_when_disabled():
@@ -158,4 +158,4 @@ def test_factory_gate_fails_on_unlearnable_data(tmp_path: Path):
     result = factory.build(spec)
     assert result.success is False
     assert result.artifact_path is None
-    assert "eval" in result.reason
+    assert "conflicting labels" in result.reason
