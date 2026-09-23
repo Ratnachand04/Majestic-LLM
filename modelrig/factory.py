@@ -8,7 +8,9 @@ The eval plane is the quality gate: if the held-out score does not clear
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+import json
+import re
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -47,9 +49,12 @@ class BuildResult:
 
 
 def _build_id(spec: BuildSpec) -> str:
-    payload = f"{spec.task}|{spec.base_model}|{spec.method.value}|{spec.quantization}|{spec.seed}"
-    digest = hashlib.blake2b(payload.encode("utf-8"), digest_size=4).hexdigest()
-    return f"{spec.task}-{spec.method.value}-{digest}"
+    from modelrig.datasets import load_dataset
+
+    payload = {"spec": asdict(spec), "data": load_dataset(spec.dataset), "format_version": 2}
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+    task = re.sub(r"[^a-zA-Z0-9_-]", "-", spec.task)[:40].strip("-") or "task"
+    return f"{task}-{spec.method.value}-{digest[:24]}"
 
 
 class Factory:
@@ -66,6 +71,12 @@ class Factory:
 
     def build(self, spec: BuildSpec) -> BuildResult:
         ensure_valid(spec)
+        if spec.eval_metric != "accuracy":
+            raise ValueError("factory gate currently supports eval_metric=accuracy only")
+        if spec.is_heavy:
+            from modelrig.training_hf import validate_hf_request
+
+            validate_hf_request(spec)
         build_id = _build_id(spec)
         plane_names = self.compiler.compile(spec)
         logger.info("build %s: planes = %s", build_id, plane_names)
@@ -76,7 +87,11 @@ class Factory:
 
         for name in plane_names:
             plane = _PLANES[name]()
-            ctx.update(plane.run(spec, ctx))
+            try:
+                ctx.update(plane.run(spec, ctx))
+            except ValueError as exc:
+                return BuildResult(build_id=build_id, success=False,
+                                   reason=f"{name} validation failed: {exc}")
 
             # Enforce the quality gate right after eval — never export a failure.
             if name == "eval" and not ctx.get("gate_passed", False):
