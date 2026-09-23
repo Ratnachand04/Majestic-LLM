@@ -362,7 +362,9 @@ def test_a_must_ask_slot_is_asked_even_at_zero_gain():
 
 def test_a_probe_costs_no_questions_and_settles_the_device_group():
     known: dict = {}
-    collapsed = Interviewer.apply_probe(known, {"device_id": "x", "ram_free_mb": 2600})
+    collapsed = Interviewer.apply_probe(
+        known, {"device_id": "x", "ram_free_mb": 2600, "source": "probe"}
+    )
     assert known["profile_source"].measured is True
     assert collapsed                      # slots settled without a question
 
