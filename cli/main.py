@@ -138,7 +138,8 @@ def _cmd_validate_spec(path: str) -> int:
 def _print_result(result) -> None:
     print(f"build_id : {result.build_id}")
     print(f"success  : {result.success}")
-    print(f"eval     : {result.eval_report}")
+    summary = {k: v for k, v in result.eval_report.items() if k not in {"predictions", "gold"}}
+    print(f"eval     : {summary}")
     if result.artifact_path:
         print(f"artifact : {result.artifact_path}")
     if result.reason:
