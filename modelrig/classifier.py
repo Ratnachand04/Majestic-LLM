@@ -154,6 +154,8 @@ def _weight(model: Model) -> np.ndarray:
 
 # --- inference ---------------------------------------------------------- #
 def predict(model: Model, texts: list[str]) -> list[str]:
+    if not texts:
+        return []
     vocab = [str(v) for v in model["vocab"]]
     idf = np.asarray(model["idf"], dtype=np.float32)
     X = _featurize(list(texts), vocab, idf)
@@ -178,6 +180,39 @@ def predict(model: Model, texts: list[str]) -> list[str]:
 
 
 # --- serialization ------------------------------------------------------ #
+def predict_confidence(model: Model, texts: list[str]) -> list[float]:
+    """Output-derived softmax/vote confidence; not a calibrated probability."""
+    if not texts:
+        return []
+    X = _featurize(texts, list(model["vocab"]), np.asarray(model["idf"]))
+    scores = X @ _weight(model).T
+    if model["kind"] == "centroid":
+        scores -= scores.max(axis=1, keepdims=True)
+        probabilities = np.exp(scores)
+        probabilities /= probabilities.sum(axis=1, keepdims=True)
+        return probabilities.max(axis=1).tolist()
+    k = min(int(model.get("k", 3)), len(model["y"]))
+    return [max(sum(model["y"][i] == label for i in np.argsort(-row)[:k])
+                for label in model["labels"]) / k for row in scores]
+
+
+def model_digest(model: Model) -> str:
+    """Hash actual tensor contents and metadata, independent of NPZ timestamps."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    for key, value in sorted(model.items()):
+        digest.update(key.encode("utf-8") + b"\0")
+        if isinstance(value, np.ndarray):
+            digest.update(str(value.dtype).encode("ascii"))
+            digest.update(json.dumps(list(value.shape)).encode("ascii"))
+            digest.update(np.ascontiguousarray(value).tobytes())
+        else:
+            digest.update(json.dumps(value, sort_keys=True, allow_nan=False).encode("utf-8"))
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def save_model(model: Model, directory: str | Path) -> Path:
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
