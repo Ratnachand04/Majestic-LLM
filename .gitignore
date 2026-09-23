@@ -18,3 +18,10 @@ checkpoints/
 outputs/
 registry/
 .DS_Store
+# Confidential local source material, never package or publish
+private/
+*.pdf
+.ruff_cache/
+paper/*.aux
+paper/*.log
+paper/*.out
