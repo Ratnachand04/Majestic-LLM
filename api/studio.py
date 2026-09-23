@@ -61,6 +61,7 @@ class BuildOutcome:
     weights_bytes: int = 0
     #: Per-stage telemetry, in the order the compiler ran them.
     stages: list[dict[str, Any]] = field(default_factory=list)
+    execution: dict[str, Any] = field(default_factory=dict)
 
     @property
     def total_ms(self) -> float:
@@ -85,16 +86,12 @@ class BuildOutcome:
             "weights_bytes": self.weights_bytes,
             "stages": self.stages,
             "total_ms": self.total_ms,
+            "execution": self.execution,
         }
 
 
 def _probe_profile() -> dict[str, Any]:
-    """A measured device profile.
-
-    Without one ``P_lat`` refuses outright rather than promising a latency it
-    never measured, so a UI build with no probe would always be refused. These
-    are the figures from the reference mid-range Android unit.
-    """
+    """An illustrative Android prior, never a measurement of the user's device."""
     from modelrig.probe import DeviceProfile
     from modelrig.probe import ProfileSource as ProbeSource
 
@@ -103,7 +100,7 @@ def _probe_profile() -> dict[str, Any]:
         bw_eff_gbps=9.24, overhead_ms_per_token=2.16, thermal_derate_180s=0.6,
         prefill_ref_tok_s=50.0, reference_params=1_720_000_000,
         probe_lo_mb=400, probe_hi_mb=1_200, storage_free_mb=24_000,
-        power_draw_w=3.5, simd=("neon", "dotprod"), source=ProbeSource.PROBE,
+        power_draw_w=3.5, simd=("neon", "dotprod"), source=ProbeSource.ASSUMED,
     ).to_dict()
 
 
@@ -171,7 +168,7 @@ def build(
             "seed_data_ref": _corpus_ref(examples),
             "latency_budget_ms": 30_000,
             "expected_input_tokens": 120,
-            "io_schema": {"label": "str"},
+            "io_schema": {"label": "str", "accept_unmeasured_latency": True},
         },
     )
 
@@ -196,6 +193,8 @@ def build(
     outcome.cartridge_id = result.cartridge_id
     outcome.stage_reached = result.stage_reached
     outcome.refusal = result.refusal
+    if result.cartridge is not None:
+        outcome.execution = result.cartridge.eval_certificate.get("execution", {})
     outcome.gates = [
         {"gate": g.gate, "passed": g.passed, "reasons": list(g.reasons)}
         for g in result.gates
@@ -362,12 +361,13 @@ def _hydrate_from_cartridge(outcome: BuildOutcome, cartridge: Any) -> None:
 
     card = cartridge.model_card or {}
     outcome.plan = {
-        "base_ref": cartridge.base_ref,
+        "base_ref": card.get("planned_base", cartridge.base_ref),
         "peft_method": card.get("training_method", ""),
         "quantiser": card.get("quantisation", ""),
         "bit_width": "",
         "target": card.get("target_runtime", ""),
     }
+    outcome.execution = cert.get("execution", {})
 
 
 def list_models(registry_path: str | Path = REGISTRY_PATH) -> list[dict[str, Any]]:
@@ -391,7 +391,8 @@ def list_models(registry_path: str | Path = REGISTRY_PATH) -> list[dict[str, Any
         card = cart.model_card or {}
         out.append({
             "cartridge_id": cid,
-            "base_ref": cart.base_ref,
+            "base_ref": card.get("base_model", cart.base_ref),
+            "execution": cart.eval_certificate.get("execution", {}),
             "task": card.get("task_primitive", ""),
             "intended_use": card.get("intended_use", ""),
             # From the weights, not the IO contract: ``output_schema`` is
@@ -404,6 +405,30 @@ def list_models(registry_path: str | Path = REGISTRY_PATH) -> list[dict[str, Any
             "packaged": exe.exists(),
             "exe_size_mb": round(exe.stat().st_size / 1_000_000, 1) if exe.exists() else None,
             "status": cart.status.value,
+        })
+    # Neural factory artifacts use their own measured task report and local HF runtime.
+    from modelrig.registry import FileSystemRegistry
+
+    factory = FileSystemRegistry(base)
+    for key in factory.list():
+        metadata = factory.get_metadata(key)
+        if metadata.get("backend") != "hf_seqcls":
+            continue
+        path = Path(factory.get(key))
+        if not path.resolve().is_relative_to(base.resolve()):
+            continue
+        import json
+
+        report = json.loads((path / "eval_report.json").read_text(encoding="utf-8"))
+        out.append({
+            "cartridge_id": key, "base_ref": metadata["base_model"],
+            "task": metadata["task"], "intended_use": "public-data classification specialist",
+            "labels": metadata["labels"], "certified": False,
+            "quality_status": report.get("status"), "accuracy": report.get("accuracy"),
+            "macro_f1": report.get("macro_f1"), "n_test": report.get("n_test"),
+            "servable": (path / "deploy").is_dir(), "has_weights": True,
+            "packaged": False, "exe_size_mb": None, "status": "active",
+            "execution": {"backend": "hf_seqcls", "runtime": "hf", "device_measured": False},
         })
     return out
 
@@ -418,8 +443,18 @@ def predict(
     if not cleaned:
         return {"predictions": [], "error": "no input text"}
     try:
-        preds = predict_with_cartridge(cartridge_id, cleaned, registry_path)
-    except FileNotFoundError as exc:
+        from modelrig.registry import FileSystemRegistry
+        from modelrig.review import predict_artifact
+
+        factory = FileSystemRegistry(registry_path)
+        if cartridge_id in factory.list():
+            path = Path(factory.get(cartridge_id)).resolve()
+            if not path.is_relative_to(Path(registry_path).resolve()):
+                raise ValueError("registered artifact is outside the registry")
+            preds = predict_artifact(path, cleaned)
+        else:
+            preds = predict_with_cartridge(cartridge_id, cleaned, registry_path)
+    except (FileNotFoundError, ValueError, KeyError) as exc:
         return {"predictions": [], "error": str(exc)}
     return {
         "predictions": [{"text": t, "label": p} for t, p in zip(cleaned, preds, strict=True)],
