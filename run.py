@@ -29,7 +29,8 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    url = f"http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port}/"
+    display_host = "localhost" if args.host in ("127.0.0.1", "0.0.0.0") else args.host
+    url = f"http://{display_host}:{args.port}/"
 
     print()
     print("  Majestic LLM")
