@@ -84,9 +84,30 @@ def load_dataset(source: str) -> list[tuple[str, str]]:
 def split_dataset(
     rows: list[tuple[str, str]], test_split: float, seed: int
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """Deterministically shuffle and split into (train, test)."""
+    """Deduplicate normalized inputs, reject conflicting labels, then stratify.
+
+    Duplicate messages cannot inflate evidence or occur on both sides of the split.
+    """
+    if not 0 < test_split < 1:
+        raise ValueError("test_split must be between zero and one")
+    unique: dict[str, tuple[str, str]] = {}
+    for text, label in rows:
+        key = " ".join(text.casefold().split())
+        if not key or not label.strip():
+            raise ValueError("dataset contains empty text or label")
+        if key in unique and unique[key][1] != label:
+            raise ValueError("identical normalized input has conflicting labels")
+        unique.setdefault(key, (text, label))
     rng = random.Random(seed)
-    shuffled = rows[:]
-    rng.shuffle(shuffled)
-    n_test = max(1, int(len(shuffled) * test_split))
-    return shuffled[n_test:], shuffled[:n_test]
+    train, test = [], []
+    for label in sorted({label for _, label in unique.values()}):
+        group = [row for row in unique.values() if row[1] == label]
+        if len(group) < 2:
+            raise ValueError(f"label {label!r} needs at least two distinct examples")
+        rng.shuffle(group)
+        n_test = min(len(group) - 1, max(1, int(len(group) * test_split)))
+        train.extend(group[n_test:])
+        test.extend(group[:n_test])
+    rng.shuffle(train)
+    rng.shuffle(test)
+    return train, test
