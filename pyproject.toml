@@ -1,7 +1,7 @@
 [project]
 name = "majestic-llm"
 version = "0.1.0"
-description = "Majestic LLM — a compound universal AI system and specialist factory."
+description = "Majestic: task-specific model construction and evidence-aware local review."
 requires-python = ">=3.10"
 # Light runtime deps needed for the offline core system. Heavy ML deps
 # (torch, transformers, peft, trl, faiss, onnx, ...) are optional and imported
@@ -14,7 +14,8 @@ dependencies = [
 
 [project.optional-dependencies]
 api = ["fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27"]
-ml = ["torch", "transformers", "peft", "trl", "accelerate"]
+ml = ["torch>=2.6", "transformers>=4.51,<5", "peft>=0.15,<0.19", "accelerate>=1,<2"]
+qlora = ["bitsandbytes>=0.45"]
 retrieval = ["sentence-transformers", "faiss-cpu"]
 compress = ["bitsandbytes", "auto-gptq", "autoawq", "onnx", "onnxruntime"]
 dev = ["pytest>=8", "ruff>=0.5", "httpx>=0.27"]
@@ -26,8 +27,12 @@ majestic = "cli.main:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["majestic", "modelrig", "api", "cli"]
+[tool.setuptools.packages.find]
+include = ["majestic*", "modelrig*", "api*", "cli*", "configs*", "frontend"]
+
+[tool.setuptools.package-data]
+configs = ["*.yaml", "specs/*.yaml"]
+frontend = ["*.html"]
 
 [tool.ruff]
 line-length = 100
