@@ -18,7 +18,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from majestic.factory import build_orchestrator  # noqa: E402
 from majestic.types import Request  # noqa: E402
 
-
 KNOWLEDGE = [
     "Majestic LLM is a compound AI system: a reasoning core plans and routes "
     "across experts and tools, grounded by retrieval, with a verifier before "
