@@ -343,6 +343,7 @@ class ProvingGround:
         self.quality_gate = quality_gate
         self.flip_bound = flip_bound
         self.judge = judge or self._default_judge
+        self.judge_source = "custom judge" if judge is not None else "lexical overlap proxy"
         self.judge_swap_inconsistency = judge_swap_inconsistency
         self.judge_agreement = judge_agreement
 
@@ -359,7 +360,7 @@ class ProvingGround:
 
     # -- individual axes --------------------------------------------------- #
     def _task_metric(self, preds: list[str], gold: list[str]) -> AxisResult:
-        score = (sum(_f1(p, g) for p, g in zip(preds, gold, strict=True))
+        score = (sum(p == g for p, g in zip(preds, gold, strict=True))
                  / len(gold)) if gold else 0.0
         # §5 — gate on the LOWER BOUND, not the point estimate. "0.937 versus
         # 0.93" at n=50 is not a comparison, it is noise: the Wilson interval
@@ -379,7 +380,7 @@ class ProvingGround:
             "task_metric", round(score, 4), self.quality_gate,
             passed=score >= self.quality_gate, blocking=True,
             interval=interval, n=n,
-            detail=(f"field-level F1 on real held-out data; 95% lower bound "
+            detail=(f"exact-match accuracy on supplied held-out data; 95% lower bound "
                     f"{lcb:.3f} against a {self.quality_gate:.2f} gate"),
         )
 
@@ -398,7 +399,7 @@ class ProvingGround:
         return AxisResult(
             "calibrated_judge", round(score, 4), threshold,
             score >= threshold, n=len(gold),
-            detail=(f"open-weight judge; {usable:.0f} of {len(gold)} examples of "
+            detail=(f"{self.judge_source}; {usable:.0f} of {len(gold)} examples of "
                     f"usable information after swap exclusion (f="
                     f"{self.judge_swap_inconsistency:.2f}) and attenuation "
                     f"(rho={self.judge_agreement:.2f}) — advisory for this reason"),
@@ -425,6 +426,7 @@ class ProvingGround:
         """General ability retained — fine-tuning degrades it measurably."""
         try:
             out = predictor(list(_REGRESSION_PROBES))
+            _assert_one_prediction_each(out, _REGRESSION_PROBES)
             ok = all(isinstance(o, str) and o for o in out)
         except Exception as exc:  # noqa: BLE001 - a crash IS the regression
             return AxisResult("regression", 0.0, 1.0, False, f"probe raised {exc}")
@@ -437,6 +439,7 @@ class ProvingGround:
         """Non-negotiable: benign fine-tuning breaks alignment by default."""
         try:
             out = predictor(list(_SAFETY_PROBES))
+            _assert_one_prediction_each(out, _SAFETY_PROBES)
         except Exception as exc:  # noqa: BLE001
             return AxisResult("safety", 0.0, 1.0, False, f"probe raised {exc}",
                               blocking=True)
@@ -521,10 +524,21 @@ class ProvingGround:
             self._privacy(predictor, training_texts),
         ]
         correct = [p == g for p, g in zip(preds, gold, strict=True)]
-        conf = list(confidences) if confidences is not None else [
-            1.0 if c else 0.0 for c in correct
-        ]
-        axes.append(self._calibration(conf, correct))
+        if confidences is None:
+            axes.append(AxisResult(
+                "calibration", 0.0, 0.85, False,
+                "not measured: predictor supplied no confidence; gold labels cannot supply it",
+                n=0,
+            ))
+        else:
+            import math
+
+            conf = list(confidences)
+            if len(conf) != len(correct) or any(
+                not math.isfinite(c) or not 0 <= c <= 1 for c in conf
+            ):
+                raise ValueError("confidence needs one finite [0, 1] value per prediction")
+            axes.append(self._calibration(conf, correct))
 
         flip = (
             answer_flip_rate(reference_predictions, preds)
