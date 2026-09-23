@@ -26,7 +26,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.routes import generate as _generate
 from api.schemas import GenerateRequest
@@ -47,24 +47,24 @@ class GenerateReply(BaseModel):
 
 
 class Example(BaseModel):
-    text: str
-    label: str
+    text: str = Field(min_length=1, max_length=100_000)
+    label: str = Field(min_length=1, max_length=1000)
 
 
 class BuildBody(BaseModel):
-    description: str
-    examples: list[Example]
-    quality_gate: float = 0.80
+    description: str = Field(min_length=1, max_length=10_000)
+    examples: list[Example] = Field(min_length=2, max_length=50_000)
+    quality_gate: float = Field(default=0.80, ge=0, le=1)
     offline: bool = True
 
 
 class PredictBody(BaseModel):
-    cartridge_id: str
-    texts: list[str]
+    cartridge_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    texts: list[str] = Field(min_length=1, max_length=256)
 
 
 class PackageBody(BaseModel):
-    cartridge_id: str
+    cartridge_id: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
 def create_app():
@@ -94,6 +94,17 @@ def create_app():
     def sample_dataset() -> dict[str, Any]:
         rows = studio.sample_dataset()
         return {"examples": rows, "count": len(rows)}
+
+    @app.get("/api/capabilities")
+    def capabilities() -> dict[str, Any]:
+        return {
+            "deployment": "local_single_user_review",
+            "studio_training": "tfidf_centroid",
+            "neural_training": ["sequence_classification_lora", "sequence_classification_qlora"],
+            "neural_export": "hf",
+            "mobile_verified": False,
+            "public_service_hardened": False,
+        }
 
     @app.post("/api/build")
     def build_route(body: BuildBody) -> dict[str, Any]:
