@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -159,11 +159,7 @@ class FabricGraph:
         """
         payload = {
             "version": self.graph_version,
-            "nodes": sorted(
-                (n.name, n.kind.value, n.requires_network, n.net_condition,
-                 n.privileged, n.role.value, n.output_domain_bits, n.adapter_ref)
-                for n in self.nodes.values()
-            ),
+            "nodes": [asdict(self.nodes[name]) for name in sorted(self.nodes)],
             "edges": sorted(self.edges),
             "max_taint_capacity_bits": self.max_taint_capacity_bits,
         }
