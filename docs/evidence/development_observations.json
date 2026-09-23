@@ -1,0 +1,9 @@
+{
+  "qlora_initial_failure": {
+    "stage": "pretrained sequence-classifier load, before training",
+    "error": "AttributeError: weight is not an nn.Module",
+    "correction": "exclude uninitialized classifier heads from bitsandbytes conversion",
+    "successful_retry": "sms_spam-qlora-a5512e8be785c14da0c986e0",
+    "limits": "one completed QLoRA replicate; not a statistical comparison"
+  }
+}
