@@ -34,11 +34,11 @@ from majestic.serving import (  # noqa: E402
     swap_latency_ms,
 )
 from modelrig.forge import Interviewer, unasked_because_irrelevant  # noqa: E402
-from modelrig.probe import DeviceProfile  # noqa: E402
-from modelrig.probe import ProfileSource as ProbeSource  # noqa: E402
 from modelrig.ir import DataRights, SpecIR  # noqa: E402
 from modelrig.pipeline import MajesticCompiler  # noqa: E402
 from modelrig.primitives import TaskPrimitive  # noqa: E402
+from modelrig.probe import DeviceProfile  # noqa: E402
+from modelrig.probe import ProfileSource as ProbeSource  # noqa: E402
 from modelrig.registry import CartridgeRegistry  # noqa: E402
 
 _POS = ["good great work", "love this service", "happy with the result",
