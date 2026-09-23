@@ -103,6 +103,30 @@ class EvalPlane(Plane):
             "passed": passed,
             "n_test": len(gold),
         }
+        from modelrig.stats import wilson
+
+        interval = wilson(correct, len(gold))
+        report["accuracy"] = score
+        report["accuracy_ci95"] = [interval.low, interval.high]
+        report["status"] = ("certified" if interval.low >= spec.target_score else
+                            "provisional" if passed else "refused")
+        report["scope"] = "classification accuracy only; no safety or target-device certificate"
+        report["post_quantisation"] = spec.quantization != "none"
+        if "reference_predictions" in ctx:
+            reference = ctx["reference_predictions"]
+            report["answer_flip_rate"] = sum(
+                p != r for p, r in zip(preds, reference, strict=True)
+            ) / len(gold)
+        labels = ctx["labels"]
+        f1s = []
+        for label in labels:
+            tp = sum(p == g == label for p, g in zip(preds, gold, strict=True))
+            fp = sum(p == label and g != label for p, g in zip(preds, gold, strict=True))
+            fn = sum(p != label and g == label for p, g in zip(preds, gold, strict=True))
+            f1s.append(2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.0)
+        report["macro_f1"] = sum(f1s) / len(f1s)
+        report["predictions"] = preds
+        report["gold"] = gold
         logger.info("eval: %s=%.3f (gate %.2f) -> %s",
                     spec.eval_metric, score, spec.target_score,
                     "PASS" if passed else "FAIL")
@@ -116,13 +140,14 @@ class CompressionPlane(Plane):
 
     def run(self, spec: BuildSpec, ctx: dict[str, Any]) -> dict[str, Any]:
         model = ctx["model"]
+        reference = _predict(model, [text for text, _ in ctx["test"]])
         if model.get("kind") not in _NUMPY_KINDS:
             from modelrig.training_hf import compress_hf  # lazy heavy path
 
-            return compress_hf(spec, model)
+            return dict(compress_hf(spec, model), reference_predictions=reference)
         compressed, report = classifier.quantize_model(model, spec.quantization)
         logger.info("compression: %s ratio=%.2fx", report["method"], report["ratio"])
-        return {"model": compressed, "compression": report}
+        return {"model": compressed, "compression": report, "reference_predictions": reference}
 
 
 class ExportPlane(Plane):
@@ -156,5 +181,8 @@ class ExportPlane(Plane):
         (out_dir / "eval_report.json").write_text(
             json.dumps(ctx["eval"], indent=2), encoding="utf-8"
         )
+        from modelrig.integrity import write_manifest
+
+        write_manifest(out_dir)
         logger.info("export: wrote artifact to %s", out_dir)
         return {"artifact_path": str(out_dir), "runtime": runtime, "metadata": metadata}
