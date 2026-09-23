@@ -387,6 +387,11 @@
     </header>
 
     <main>
+      <p style="color:var(--muted);margin-bottom:20px">
+        Local classifier review studio. Builds TF-IDF specialists; the language-model plan
+        and Android resource figures are estimates. Scores apply to the supplied dataset.
+        Neural LoRA builds are available through the CLI. No mobile certification is implied.
+      </p>
       <!-- 01 -------------------------------------------------------------- -->
       <section class="panel">
         <h2 class="phead"><span class="idx">01</span> Mission brief <span class="rule"></span>
@@ -418,8 +423,8 @@
 
       <!-- 02 -------------------------------------------------------------- -->
       <section class="panel locked" id="seqPanel">
-        <h2 class="phead"><span class="idx">02</span> Launch sequence <span class="rule"></span>
-          <span class="aux">measured, not estimated</span></h2>
+        <h2 class="phead"><span class="idx">02</span> Build sequence <span class="rule"></span>
+          <span class="aux">execution timing and stage outcomes</span></h2>
         <div class="seq" id="seq"></div>
         <div class="seqfoot">
           <span class="bigms" id="totalMs">0.0</span><span class="unit">MS TOTAL</span>
@@ -451,14 +456,14 @@
         </div>
         <div class="gauges" id="axes"></div>
         <div class="note" id="axesNote">AWAITING BUILD · the tick on each dial is the bar that
-          axis has to clear. Amber axes block admission; grey axes advise — seven blocking gates
-          would ship only a fraction of the models that are actually good enough.</div>
+          axis has to clear. Amber axes block admission; grey axes advise.
+          These are local checks with the scope and sample counts shown.</div>
       </section>
 
       <!-- 05 -------------------------------------------------------------- -->
       <section class="panel locked" id="testPanel">
-        <h2 class="phead"><span class="idx">05</span> Live fire <span class="rule"></span>
-          <span class="aux">inference through the artefact you just built</span></h2>
+        <h2 class="phead"><span class="idx">05</span> Inference <span class="rule"></span>
+          <span class="aux">use the selected local model</span></h2>
         <label for="testText">Input — one per line</label>
         <textarea id="testText">the team resolved it quickly, very happy
 this was a broken and frustrating experience
@@ -479,11 +484,11 @@ far too slow, never fixed</textarea>
 
       <!-- 06 -------------------------------------------------------------- -->
       <section class="panel locked" id="shipPanel">
-        <h2 class="phead"><span class="idx">06</span> Launch <span class="rule"></span>
-          <span class="aux">freeze the certified model into a standalone binary</span></h2>
+        <h2 class="phead"><span class="idx">06</span> Package <span class="rule"></span>
+          <span class="aux">freeze a NumPy classifier into a standalone binary</span></h2>
         <div class="note" style="margin-top:0;margin-bottom:14px">
-          No Python, no downloads, no network on the target machine. The weights are
-          a couple of kilobytes — the binary is mostly the frozen runtime.
+          This packager bundles the NumPy model and Python runtime. Neural models
+          use the portable HF export and require the documented Python dependencies.
         </div>
         <div class="controls">
           <div class="spacer"></div>
@@ -832,8 +837,8 @@ function renderBuild(d) {
     $('planKv').innerHTML = `
       <dt>Cartridge</dt><dd>${esc((d.cartridge_id || '').slice(0, 24))}…${cached
         ? ' <span class="chip cyan">served from cache — nothing retrained</span>' : ''}</dd>
-      <dt>Base</dt><dd>${esc(p.base_ref || '—')}</dd>
-      <dt>Build</dt><dd>${esc(p.peft_method || '—')} · ${esc(p.quantiser || '—')} · ${esc(p.target || '—')}</dd>
+      <dt>Executed model</dt><dd>TF-IDF centroid · NumPy</dd>
+      <dt>Analytical plan</dt><dd>${esc(p.base_ref || '—')} · ${esc(p.bit_width || '—')}</dd>
       <dt>Corpus</dt><dd>${d.n_seeds} real seeds${
         d.n_train > d.n_seeds ? ` → ${d.n_train} rows after amplification` : ''
       } · ${d.n_holdout} held out, never amplified · ${(d.labels || []).map(esc).join(' / ')}</dd>
@@ -850,7 +855,7 @@ function renderBuild(d) {
       <div class="stamp">■ HOLD — ${esc((d.stage_reached || 'gate').toUpperCase())}</div>
       <div class="body">${esc(d.refusal || 'no reason recorded')}</div>
       <div class="why">A hold is a result, not a crash. The compiler declined to build something
-        it could not certify, and said which constraint stopped it — before spending anything on it.</div>`;
+        that failed a local admission requirement. The report identifies the blocking constraint.</div>`;
     box.classList.remove('hidden');
   }
 
@@ -903,11 +908,11 @@ function renderAxes(d) {
   $('plainSummary').textContent = d.plain_summary || '';
   const stamp = $('statusStamp');
   stamp.className = 'stamp ' + (d.status || '');
-  stamp.textContent = (d.status || '').toUpperCase();
+  stamp.textContent = d.status === 'certified' ? 'LOCAL CHECKS PASSED' : (d.status || '').toUpperCase();
   $('claimBox').classList.toggle('hidden', !d.plain_summary);
   $('axesNote').textContent = 'The tick on each dial is the bar that axis has to clear. '
-    + 'Amber axes block admission; grey axes advise — seven blocking gates would ship '
-    + 'only a fraction of the models that are actually good enough.';
+    + 'Amber axes block admission; grey axes advise. These local checks have the '
+    + 'scope and sample counts shown; they do not establish production safety.';
 
   $('axes').innerHTML = axes.map(gauge).join('');
   // Set the real offsets on the next frame so the CSS transition has a
@@ -1003,10 +1008,10 @@ async function loadModels() {
     const rows = (await r.json()).models || [];
     $('models').innerHTML = rows.length ? rows.map((m, i) => `
       <tr style="animation-delay:${i * 60}ms">
-        <td>${esc(m.cartridge_id.slice(0, 12))}…</td>
+        <td><button class="select-model" data-model="${esc(m.cartridge_id)}" data-neural="${m.execution?.backend === 'hf_seqcls'}" ${m.servable ? '' : 'disabled'}>Use ${esc(m.cartridge_id.slice(0, 12))}…</button></td>
         <td>${esc(m.task || '')}</td>
         <td style="color:var(--muted)">${esc(m.base_ref || '')}</td>
-        <td><span class="chip ${m.certified ? 'ok' : 'bad'}">${m.certified ? 'yes' : 'no'}</span></td>
+        <td><span class="chip ${m.certified || m.quality_status ? 'ok' : 'bad'}">${m.quality_status ? 'task: ' + esc(m.quality_status) : (m.certified ? 'local checks' : 'no')}</span>${m.accuracy ? '<br>' + (100*m.accuracy).toFixed(2) + '% · n=' + m.n_test : ''}</td>
         <td><span class="chip ${m.servable ? 'ok' : 'mute'}">${m.servable ? 'yes' : 'no'}</span></td>
         <td>${m.packaged
           ? `<span class="chip cyan">${m.exe_size_mb} MB</span>`
@@ -1017,6 +1022,19 @@ async function loadModels() {
 }
 
 $('refreshModels').addEventListener('click', loadModels);
+$('models').addEventListener('click', (event) => {
+  const button = event.target.closest('.select-model');
+  if (!button) return;
+  CURRENT = button.dataset.model;
+  button.textContent = 'Selected ' + CURRENT.slice(0, 12) + '…';
+  unlock('testPanel');
+  $('predWrap').classList.add('hidden');
+  $('shipPanel').classList.toggle('locked', button.dataset.neural === 'true');
+  if (button.dataset.neural === 'true') {
+    $('testText').value = 'Please call me after the meeting\nCongratulations! Claim your free prize now!';
+  }
+  $('testPanel').scrollIntoView({behavior: 'smooth', block: 'center'});
+});
 checkHealth();
 loadModels();
 updateDataHint();
