@@ -8,6 +8,8 @@ import io
 import json
 import platform
 import statistics
+import subprocess
+import sys
 import time
 import urllib.request
 import zipfile
@@ -38,11 +40,27 @@ def environment() -> dict:
     result = {"python": platform.python_version(), "os": platform.platform(),
               "packages": packages}
     if packages["torch"]:
-        import torch
-
-        result["cuda_available"] = torch.cuda.is_available()
-        result["cuda_version"] = torch.version.cuda
-        result["gpu"] = torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+        probe = (
+            "import json, torch\n"
+            "available = torch.cuda.is_available()\n"
+            "print(json.dumps({"
+            "'cuda_available': available, "
+            "'cuda_version': torch.version.cuda, "
+            "'gpu': torch.cuda.get_device_name(0) if available else None"
+            "}))\n"
+        )
+        try:
+            completed = subprocess.run(
+                [sys.executable, "-c", probe],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=True,
+            )
+            result.update(json.loads(completed.stdout))
+        except (subprocess.SubprocessError, json.JSONDecodeError) as exc:
+            result.update({"cuda_available": None, "cuda_version": None, "gpu": None,
+                           "cuda_probe_error": str(exc)})
     return result
 
 
