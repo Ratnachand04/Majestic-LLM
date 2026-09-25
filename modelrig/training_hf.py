@@ -4,6 +4,7 @@ from __future__ import annotations
 import gc
 import json
 import shutil
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -142,20 +143,30 @@ def train_hf(spec: BuildSpec, ctx: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-def hf_predict(model: dict[str, Any], texts: list[str]) -> list[str]:
-    if not texts:
-        return []
+@lru_cache(maxsize=4)
+def _load_hf_classifier(path: str, deployment_quantization: str) -> tuple[Any, Any]:
     import torch
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-    path = model["model_dir"]
     tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
     kwargs: dict[str, Any] = {"local_files_only": True}
-    if model.get("deployment_quantization", "none") != "none":
+    if deployment_quantization != "none":
         kwargs["device_map"] = {"": 0}
     net = AutoModelForSequenceClassification.from_pretrained(path, **kwargs).eval()
     if not getattr(net, "is_quantized", False):
         net.to("cuda" if torch.cuda.is_available() else "cpu")
+    return tokenizer, net
+
+
+def hf_predict(model: dict[str, Any], texts: list[str]) -> list[str]:
+    if not texts:
+        return []
+    import torch
+
+    tokenizer, net = _load_hf_classifier(
+        str(Path(model["model_dir"]).resolve()),
+        model.get("deployment_quantization", "none"),
+    )
     predictions = []
     with torch.inference_mode():
         for start in range(0, len(texts), 16):
@@ -163,10 +174,6 @@ def hf_predict(model: dict[str, Any], texts: list[str]) -> list[str]:
                                 truncation=True, max_length=model.get("max_length", 256))
             logits = net(**encoded.to(net.device)).logits
             predictions.extend(model["labels"][i] for i in logits.argmax(-1).tolist())
-    del net
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
     return predictions
 
 
