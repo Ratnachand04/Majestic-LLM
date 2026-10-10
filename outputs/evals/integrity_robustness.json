@@ -1,0 +1,252 @@
+{
+  "integrity": {
+    "n": 15,
+    "agree": 15,
+    "rate": 1.0,
+    "rows": [
+      {
+        "case": "untouched",
+        "why": "the control: an intact artifact must verify",
+        "expected": "accept",
+        "observed": "accept",
+        "agrees": true,
+        "detail": ""
+      },
+      {
+        "case": "single-byte-flip",
+        "why": "one bit of a weight file changed",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact integrity failed: model.bin"
+      },
+      {
+        "case": "truncated-file",
+        "why": "a half-written download",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact integrity failed: model.bin"
+      },
+      {
+        "case": "zero-length-file",
+        "why": "a file emptied in place",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact integrity failed: model.bin"
+      },
+      {
+        "case": "deleted-file",
+        "why": "a file the manifest lists is gone",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact files differ from integrity manifest"
+      },
+      {
+        "case": "extra-file",
+        "why": "a file nobody declared appears beside the model",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact files differ from integrity manifest"
+      },
+      {
+        "case": "renamed-file",
+        "why": "same bytes, different path",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact files differ from integrity manifest"
+      },
+      {
+        "case": "manifest-entry-dropped",
+        "why": "the manifest no longer covers a file",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact files differ from integrity manifest"
+      },
+      {
+        "case": "manifest-emptied",
+        "why": "an empty manifest proves nothing",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: empty artifact integrity manifest"
+      },
+      {
+        "case": "manifest-missing",
+        "why": "no manifest at all",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "FileNotFoundError: [Errno 2] No such file or directory: 'C:\\\\Users\\\\ratna\\\\AppData\\\\Local\\\\Temp\\\\tmp9b069xzs\\\\case-manifest-missing\\\\checksu"
+      },
+      {
+        "case": "manifest-not-json",
+        "why": "a corrupted manifest",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"
+      },
+      {
+        "case": "manifest-path-traversal",
+        "why": "an entry escaping the artifact root",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact files differ from integrity manifest"
+      },
+      {
+        "case": "manifest-absolute-path",
+        "why": "an entry naming an absolute path",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact files differ from integrity manifest"
+      },
+      {
+        "case": "manifest-zero-hash",
+        "why": "an entry whose digest cannot match",
+        "expected": "reject",
+        "observed": "reject",
+        "agrees": true,
+        "detail": "ValueError: artifact integrity failed: config.json"
+      },
+      {
+        "case": "consistent-forgery",
+        "why": "payload AND manifest rewritten together",
+        "expected": "accept",
+        "observed": "accept",
+        "agrees": true,
+        "detail": ""
+      }
+    ]
+  },
+  "dataflow": {
+    "n": 11,
+    "agree": 11,
+    "rate": 1.0,
+    "rows": [
+      {
+        "case": "chain-unconfirmed",
+        "why": "untrusted input reaches a privileged sink",
+        "expected_safe": false,
+        "observed_safe": false,
+        "agrees": true,
+        "acyclic": true,
+        "detail": "indirect prompt-injection surface: untrusted content from 'input' can reach privileged node 'sink' via input -> model -> sink (capacity unbounded, narrowed at '"
+      },
+      {
+        "case": "chain-confirmed",
+        "why": "a human clears the taint",
+        "expected_safe": true,
+        "observed_safe": true,
+        "agrees": true,
+        "acyclic": true,
+        "detail": ""
+      },
+      {
+        "case": "branch-one-arm-confirmed",
+        "why": "one unconfirmed arm is enough to make the graph unsafe",
+        "expected_safe": false,
+        "observed_safe": false,
+        "agrees": true,
+        "acyclic": true,
+        "detail": "indirect prompt-injection surface: untrusted content from 'input' can reach privileged node 'sink' via input -> right -> sink (capacity unbounded, narrowed at '"
+      },
+      {
+        "case": "branch-both-arms-confirmed",
+        "why": "every arm passes a human",
+        "expected_safe": true,
+        "observed_safe": true,
+        "agrees": true,
+        "acyclic": true,
+        "detail": ""
+      },
+      {
+        "case": "two-untrusted-sources",
+        "why": "two sources, one privileged sink",
+        "expected_safe": false,
+        "observed_safe": false,
+        "agrees": true,
+        "acyclic": true,
+        "detail": "indirect prompt-injection surface: untrusted content from 'web' can reach privileged node 'sink' via web -> merge -> sink (capacity unbounded, narrowed at 'merg"
+      },
+      {
+        "case": "trusted-only",
+        "why": "no untrusted source at all",
+        "expected_safe": true,
+        "observed_safe": true,
+        "agrees": true,
+        "acyclic": true,
+        "detail": ""
+      },
+      {
+        "case": "untrusted-to-unprivileged",
+        "why": "untrusted input, nothing privileged",
+        "expected_safe": true,
+        "observed_safe": true,
+        "agrees": true,
+        "acyclic": true,
+        "detail": ""
+      },
+      {
+        "case": "network-in-offline-graph",
+        "why": "a networked tool under offline mode",
+        "expected_safe": false,
+        "observed_safe": false,
+        "agrees": true,
+        "acyclic": true,
+        "detail": "offline closure BROKEN at 'fetch'"
+      },
+      {
+        "case": "cycle",
+        "why": "a cycle breaks the acyclicity the analysis needs",
+        "expected_safe": false,
+        "observed_safe": false,
+        "agrees": true,
+        "acyclic": false,
+        "detail": "graph 'cycle' contains a cycle; Fabric graphs must be acyclic"
+      },
+      {
+        "case": "long-laundering-chain",
+        "why": "sixteen hops do not sanitise",
+        "expected_safe": false,
+        "observed_safe": false,
+        "agrees": true,
+        "acyclic": true,
+        "detail": "indirect prompt-injection surface: untrusted content from 'input' can reach privileged node 'sink' via input -> c0 -> c1 -> c2 -> c3 -> c4 -> c5 -> c6 -> c7 -> "
+      },
+      {
+        "case": "diamond-shortcut",
+        "why": "a confirmed path plus an unconfirmed shortcut",
+        "expected_safe": false,
+        "observed_safe": false,
+        "agrees": true,
+        "acyclic": true,
+        "detail": "indirect prompt-injection surface: untrusted content from 'input' can reach privileged node 'sink' via input -> sink (capacity unbounded, narrowed at 'sink')"
+      }
+    ]
+  },
+  "boundary": [
+    {
+      "claim": "the manifest does not authenticate",
+      "demonstrated": true,
+      "meaning": "an attacker who can write the artifact can write the manifest with it, and the check then passes. It establishes integrity RELATIVE to a manifest \u2014 it detects damage and accident, not an adversary with write access. Authentication would need a signature over the manifest with a key the attacker lacks."
+    },
+    {
+      "claim": "Fabric validates declarations, not implementations",
+      "demonstrated": true,
+      "meaning": "a node that declares no network use and clears taint is accepted on that declaration. Whether its handler honours it is outside what analysing the graph can see. The guarantee is conditional on declarations being truthful, which is an assumption about the node registry, not a property proven here."
+    },
+    {
+      "claim": "coverage is of these templates and declared effects only",
+      "demonstrated": true,
+      "meaning": "the corpus below is planted: it establishes that the checks fire on constructed violations. It does not quantify behaviour on real user graphs, prove handler isolation, or establish superiority over runtime testing."
+    }
+  ]
+}
