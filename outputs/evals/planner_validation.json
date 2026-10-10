@@ -1,0 +1,1586 @@
+{
+  "n_cases": 73,
+  "finding_p_seed_reachability": {
+    "extract": {
+      "gate1_floor": 120,
+      "coverage_floor": 100,
+      "p_seed_can_bind": false
+    },
+    "classify": {
+      "gate1_floor": 80,
+      "coverage_floor": 60,
+      "p_seed_can_bind": false
+    },
+    "summarise": {
+      "gate1_floor": 150,
+      "coverage_floor": 120,
+      "p_seed_can_bind": false
+    },
+    "rewrite": {
+      "gate1_floor": 150,
+      "coverage_floor": 120,
+      "p_seed_can_bind": false
+    },
+    "generate": {
+      "gate1_floor": 200,
+      "coverage_floor": 200,
+      "p_seed_can_bind": false
+    },
+    "answer": {
+      "gate1_floor": 150,
+      "coverage_floor": 100,
+      "p_seed_can_bind": false
+    },
+    "route": {
+      "gate1_floor": 80,
+      "coverage_floor": 150,
+      "p_seed_can_bind": true
+    },
+    "toolcall": {
+      "gate1_floor": 200,
+      "coverage_floor": 250,
+      "p_seed_can_bind": true
+    }
+  },
+  "finding_p_seed_reachable_for": [
+    "route",
+    "toolcall"
+  ],
+  "refusal_layer": {
+    "gate1": 15,
+    "planner": 15
+  },
+  "stratum_soft": {
+    "n": 20,
+    "agreement_rate": 1.0,
+    "refusals": 10,
+    "precision": 1.0,
+    "recall": 1.0,
+    "all_decided_by_planner": true
+  },
+  "agreement_rate": 1.0,
+  "agreements": 73,
+  "disagreements": 0,
+  "refusals_observed": 30,
+  "headline_soft_only_precision": null,
+  "soft_only_refusals": 0,
+  "hard_involved_refusals": 15,
+  "aggregate_precision_INFLATABLE": 1.0,
+  "refusal_recall": 1.0,
+  "per_predicate": {
+    "P_cost": {
+      "fired": 3,
+      "correct": 3,
+      "class": "soft",
+      "precision": 1.0
+    },
+    "P_lat": {
+      "fired": 6,
+      "correct": 6,
+      "class": "soft",
+      "precision": 1.0
+    },
+    "P_ram": {
+      "fired": 6,
+      "correct": 6,
+      "class": "hard",
+      "precision": 1.0
+    },
+    "P_seed": {
+      "fired": 6,
+      "correct": 6,
+      "class": "soft",
+      "precision": 1.0
+    },
+    "gate1": {
+      "fired": 15,
+      "correct": 15,
+      "class": "gate1",
+      "precision": 1.0
+    }
+  },
+  "expected_distribution": {
+    "refuse": 30,
+    "admit": 43
+  },
+  "disagreement_detail": [],
+  "binding_mismatch_detail": [],
+  "rows": [
+    {
+      "id": "seed-below-classify",
+      "clause": "Part 8 \u00a71 effective floor",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 40 is below the floor of 80 real examples for primitive 'classify'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-above-classify",
+      "clause": "Part 2 \u00a73.4 coverage floor",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "seed-below-route",
+      "clause": "Part 8 \u00a71 effective floor",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_seed",
+      "witness": [
+        "P_seed"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "100 real seeds is below the derived floor of 150 for 'route': a behavioural mode of mass 2.0% would be missed with probability 14%, and amplification cannot recover it"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 432
+    },
+    {
+      "id": "seed-above-route",
+      "clause": "Part 2 \u00a73.4 coverage floor",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "seed-below-toolcall",
+      "clause": "Part 8 \u00a71 effective floor",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 150 is below the floor of 200 real examples for primitive 'toolcall'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-above-toolcall",
+      "clause": "Part 2 \u00a73.4 coverage floor",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 96,
+      "predicate_evaluations": 864
+    },
+    {
+      "id": "seed-below-extract",
+      "clause": "Part 8 \u00a71 effective floor",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 60 is below the floor of 120 real examples for primitive 'extract'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-above-extract",
+      "clause": "Part 2 \u00a73.4 coverage floor",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "seed-below-summarise",
+      "clause": "Part 8 \u00a71 effective floor",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 80 is below the floor of 150 real examples for primitive 'summarise'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-above-summarise",
+      "clause": "Part 2 \u00a73.4 coverage floor",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 96,
+      "predicate_evaluations": 864
+    },
+    {
+      "id": "seed-below-answer",
+      "clause": "Part 8 \u00a71 effective floor",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 80 is below the floor of 150 real examples for primitive 'answer'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-above-answer",
+      "clause": "Part 2 \u00a73.4 coverage floor",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 96,
+      "predicate_evaluations": 864
+    },
+    {
+      "id": "seed-sweep-10",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": null,
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 10 is below the floor of 80 real examples for primitive 'classify'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-sweep-30",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": null,
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 30 is below the floor of 80 real examples for primitive 'classify'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-sweep-59",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": null,
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 59 is below the floor of 80 real examples for primitive 'classify'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-sweep-60",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": null,
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 60 is below the floor of 80 real examples for primitive 'classify'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-sweep-70",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": null,
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 70 is below the floor of 80 real examples for primitive 'classify'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-sweep-79",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": null,
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "seed data 79 is below the floor of 80 real examples for primitive 'classify'. Amplification multiplies effective data by at most (1 + kappa) and cannot extend the support of the seed set, so more generation will not substitute for more seeds"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "seed-sweep-80",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "seed-sweep-120",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "seed-sweep-500",
+      "clause": "Part 8 \u00a71 effective floor = max(engineering, coverage)",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "lat-unmeasured-refuses",
+      "clause": "Part 2 \u00a73.2 unmeasured device cannot promise",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_lat",
+      "witness": [
+        "P_ram",
+        "P_lat"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "Qwen/Qwen3-4B at int8 needs 6325 MB (weights 4273 + KV 302 at 2048 ctx + runtime 150 + app 1600) but android_midrange has 6000 MB free [prior] \u2014 over by 325 MB",
+        "latency_source for android_midrange is 'unmeasured': a latency commitment cannot be made from unmeasured hardware. Effective throughput runs at 30-60% of peak and varies with thermal state and kernel quality."
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 544
+    },
+    {
+      "id": "lat-accepted-estimate",
+      "clause": "Part 3 \u00a79 explicit acceptance of an estimate",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1184
+    },
+    {
+      "id": "lat-impossible-budget",
+      "clause": "Part 2 \u00a73.2 prefill alone exceeds 1 ms",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_lat",
+      "witness": [
+        "P_ram",
+        "P_lat"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "Qwen/Qwen3-4B at int8 needs 6325 MB (weights 4273 + KV 302 at 2048 ctx + runtime 150 + app 1600) but android_midrange has 6000 MB free [prior] \u2014 over by 325 MB",
+        "meta-llama/Llama-3.2-1B-Instruct on android_midrange: estimated 4.7 s (1.8 s prefill over 120 tokens + 2.9 s decode over 64) against a 0.0 s budget \u2014 decode dominates"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 544
+    },
+    {
+      "id": "lat-absent-budget-abstains",
+      "clause": "P_lat abstains with no budget declared",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1184
+    },
+    {
+      "id": "lat-long-input-dominates",
+      "clause": "Part 4 \u00a713.3 prefill dominates at n_in/n_out > 6",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_lat",
+      "witness": [
+        "P_ram",
+        "P_lat"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "Qwen/Qwen3-4B at awq_int4 needs 3965 MB (weights 2313 + KV 302 at 2048 ctx + runtime 150 + app 1200) but android_lowend has 3000 MB free [prior] \u2014 over by 965 MB",
+        "meta-llama/Llama-3.2-1B-Instruct on android_lowend: estimated 138.5 s (132.6 s prefill over 4000 tokens + 5.8 s decode over 64) against a 2.0 s budget \u2014 prefill dominates"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 448
+    },
+    {
+      "id": "ram-lowend-downshifts",
+      "clause": "Part 2 \u00a712 maximum over a chain",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 848
+    },
+    {
+      "id": "ram-gpu-fits",
+      "clause": "Part 2 \u00a73.1 a laptop GPU holds the catalogue",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "ram-pi4-downshifts",
+      "clause": "Part 2 \u00a712 maximum over a chain",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1184
+    },
+    {
+      "id": "lic-no-training",
+      "clause": "Part 5 \u00a710 no_training is an absorbing element",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "data rights 'no_training' are insufficient to train on the seed corpus"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "lic-unknown-rights",
+      "clause": "Part 5 \u00a710 unknown rights cannot be composed",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "data rights 'unknown' are insufficient to train on the seed corpus"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "lic-customer-owned",
+      "clause": "Part 5 \u00a710 customer_owned composes",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "lic-public-domain",
+      "clause": "Part 5 \u00a710 public_domain composes",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "lic-licensed",
+      "clause": "Part 5 \u00a710 licensed composes with obligations",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "off-escalate-contradiction",
+      "clause": "Part 4 \u00a711 offline implies no escalation",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "offline_required=True contradicts abstention_policy='escalate': a customer who bought offline gets offline (B-10)"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "off-flag-is-consistent",
+      "clause": "Part 4 \u00a711 flag needs no network",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "cost-starved",
+      "clause": "Part 2 \u00a73.7 budget below the cheapest plan",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_cost",
+      "witness": [
+        "P_cost"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "estimated build cost $2.28 exceeds the tier ceiling $0.00; teacher generation dominates"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1008
+    },
+    {
+      "id": "cost-generous",
+      "clause": "Part 2 \u00a73.7 ample budget",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "gate-0.6",
+      "clause": "Part 2 \u00a76 theta* governs, not the gate value",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "gate-0.8",
+      "clause": "Part 2 \u00a76 theta* governs, not the gate value",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "gate-0.9",
+      "clause": "Part 2 \u00a76 theta* governs, not the gate value",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "gate-0.995",
+      "clause": "Part 2 \u00a76 theta* governs, not the gate value",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "depth-beyond-tier",
+      "clause": "Part 1 \u00a73.8 ceiling, held at Gate 1",
+      "layer": "gate1",
+      "stratum": "path",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "gate1",
+      "witness": [
+        "gate1"
+      ],
+      "hard_failures": [
+        "gate1"
+      ],
+      "soft_failures": [],
+      "reasons": [
+        "step depth 8 exceeds 3, the maximum 'toolcall' sustains at small scale (A-09)"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 0,
+      "predicate_evaluations": 0
+    },
+    {
+      "id": "depth-within-tier",
+      "clause": "Part 1 \u00a73.8 depth inside the tier",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 96,
+      "predicate_evaluations": 864
+    },
+    {
+      "id": "jurisdiction-eu-offline",
+      "clause": "Part 2 \u00a73.6 local-only teacher",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "jurisdiction-in",
+      "clause": "Part 2 \u00a73.6 default jurisdiction",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "device-android_lowend",
+      "clause": "Part 2 \u00a73.1 memory across the device ladder",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 848
+    },
+    {
+      "id": "device-android_midrange",
+      "clause": "Part 2 \u00a73.1 memory across the device ladder",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1184
+    },
+    {
+      "id": "device-android_tablet_4gb",
+      "clause": "Part 2 \u00a73.1 memory across the device ladder",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 960
+    },
+    {
+      "id": "device-android_flagship",
+      "clause": "Part 2 \u00a73.1 memory across the device ladder",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "device-raspberry_pi4",
+      "clause": "Part 2 \u00a73.1 memory across the device ladder",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1184
+    },
+    {
+      "id": "device-laptop_cpu",
+      "clause": "Part 2 \u00a73.1 memory across the device ladder",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "device-laptop_gpu",
+      "clause": "Part 2 \u00a73.1 memory across the device ladder",
+      "layer": "planner",
+      "stratum": "path",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "soft-seed-route-80",
+      "clause": "Part 2 \u00a73.4 coverage floor 150 for route",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_seed",
+      "witness": [
+        "P_seed"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "80 real seeds is below the derived floor of 150 for 'route': a behavioural mode of mass 2.0% would be missed with probability 20%, and amplification cannot recover it"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 432
+    },
+    {
+      "id": "soft-seed-route-100",
+      "clause": "Part 2 \u00a73.4 coverage floor 150 for route",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_seed",
+      "witness": [
+        "P_seed"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "100 real seeds is below the derived floor of 150 for 'route': a behavioural mode of mass 2.0% would be missed with probability 14%, and amplification cannot recover it"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 432
+    },
+    {
+      "id": "soft-seed-route-149",
+      "clause": "Part 2 \u00a73.4 coverage floor 150 for route",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_seed",
+      "witness": [
+        "P_seed"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "149 real seeds is below the derived floor of 150 for 'route': a behavioural mode of mass 2.0% would be missed with probability 5%, and amplification cannot recover it"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 432
+    },
+    {
+      "id": "soft-seed-route-150",
+      "clause": "Part 2 \u00a73.4 coverage floor 150 for route",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "soft-seed-route-200",
+      "clause": "Part 2 \u00a73.4 coverage floor 150 for route",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "soft-seed-route-400",
+      "clause": "Part 2 \u00a73.4 coverage floor 150 for route",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "soft-seed-toolcall-200",
+      "clause": "Part 2 \u00a73.4 coverage floor 250 for toolcall",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_seed",
+      "witness": [
+        "P_seed"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "200 real seeds is below the derived floor of 250 for 'toolcall': a behavioural mode of mass 1.2% would be missed with probability 9%, and amplification cannot recover it"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 96,
+      "predicate_evaluations": 288
+    },
+    {
+      "id": "soft-seed-toolcall-240",
+      "clause": "Part 2 \u00a73.4 coverage floor 250 for toolcall",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_seed",
+      "witness": [
+        "P_seed"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "240 real seeds is below the derived floor of 250 for 'toolcall': a behavioural mode of mass 1.2% would be missed with probability 6%, and amplification cannot recover it"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 96,
+      "predicate_evaluations": 288
+    },
+    {
+      "id": "soft-seed-toolcall-250",
+      "clause": "Part 2 \u00a73.4 coverage floor 250 for toolcall",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 96,
+      "predicate_evaluations": 864
+    },
+    {
+      "id": "soft-seed-toolcall-600",
+      "clause": "Part 2 \u00a73.4 coverage floor 250 for toolcall",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 96,
+      "predicate_evaluations": 864
+    },
+    {
+      "id": "soft-lat-50ms",
+      "clause": "Part 4 \u00a713.3 prefill + decode against the budget",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_lat",
+      "witness": [
+        "P_ram",
+        "P_lat"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "Qwen/Qwen3-4B at int8 needs 6325 MB (weights 4273 + KV 302 at 2048 ctx + runtime 150 + app 1600) but android_midrange has 6000 MB free [prior] \u2014 over by 325 MB",
+        "meta-llama/Llama-3.2-1B-Instruct on android_midrange: estimated 17.5 s (14.6 s prefill over 1000 tokens + 2.9 s decode over 64) against a 0.1 s budget \u2014 prefill dominates"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 544
+    },
+    {
+      "id": "soft-lat-500ms",
+      "clause": "Part 4 \u00a713.3 prefill + decode against the budget",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_lat",
+      "witness": [
+        "P_ram",
+        "P_lat"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "Qwen/Qwen3-4B at int8 needs 6325 MB (weights 4273 + KV 302 at 2048 ctx + runtime 150 + app 1600) but android_midrange has 6000 MB free [prior] \u2014 over by 325 MB",
+        "meta-llama/Llama-3.2-1B-Instruct on android_midrange: estimated 17.5 s (14.6 s prefill over 1000 tokens + 2.9 s decode over 64) against a 0.5 s budget \u2014 prefill dominates"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 544
+    },
+    {
+      "id": "soft-lat-5000ms",
+      "clause": "Part 4 \u00a713.3 prefill + decode against the budget",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_lat",
+      "witness": [
+        "P_ram",
+        "P_lat"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "Qwen/Qwen3-4B at int8 needs 6325 MB (weights 4273 + KV 302 at 2048 ctx + runtime 150 + app 1600) but android_midrange has 6000 MB free [prior] \u2014 over by 325 MB",
+        "meta-llama/Llama-3.2-1B-Instruct on android_midrange: estimated 17.5 s (14.6 s prefill over 1000 tokens + 2.9 s decode over 64) against a 5.0 s budget \u2014 prefill dominates"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 544
+    },
+    {
+      "id": "soft-lat-120000ms",
+      "clause": "Part 4 \u00a713.3 prefill + decode against the budget",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1184
+    },
+    {
+      "id": "soft-lat-600000ms",
+      "clause": "Part 4 \u00a713.3 prefill + decode against the budget",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1184
+    },
+    {
+      "id": "soft-cost-0.0005",
+      "clause": "Part 2 \u00a73.7 expected build cost against the ceiling",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_cost",
+      "witness": [
+        "P_cost"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "estimated build cost $2.28 exceeds the tier ceiling $0.00; teacher generation dominates"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1008
+    },
+    {
+      "id": "soft-cost-0.01",
+      "clause": "Part 2 \u00a73.7 expected build cost against the ceiling",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "refuse",
+      "observed": "refuse",
+      "expected_binding": "P_cost",
+      "witness": [
+        "P_cost"
+      ],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [
+        "estimated build cost $2.28 exceeds the tier ceiling $0.01; teacher generation dominates"
+      ],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1008
+    },
+    {
+      "id": "soft-cost-5.0",
+      "clause": "Part 2 \u00a73.7 expected build cost against the ceiling",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "soft-cost-40.0",
+      "clause": "Part 2 \u00a73.7 expected build cost against the ceiling",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    },
+    {
+      "id": "soft-cost-500.0",
+      "clause": "Part 2 \u00a73.7 expected build cost against the ceiling",
+      "layer": "planner",
+      "stratum": "soft",
+      "expected": "admit",
+      "observed": "admit",
+      "expected_binding": null,
+      "witness": [],
+      "hard_failures": [],
+      "soft_failures": [],
+      "reasons": [],
+      "agrees": true,
+      "binding_matches": true,
+      "soft_only": false,
+      "candidates_considered": 144,
+      "predicate_evaluations": 1296
+    }
+  ]
+}
