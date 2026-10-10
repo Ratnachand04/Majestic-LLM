@@ -1,0 +1,1247 @@
+{
+  "study": "generalisation beyond the single reported dataset",
+  "reviewer_item": "evaluate the compiler architecture on additional task types beyond SMS spam classification",
+  "interview": {
+    "question": "what does FORGE settle from a plain description, and what does it insist on asking",
+    "emitted": 2,
+    "agreed_on_primitive": 1,
+    "tasks": 5,
+    "records": [
+      {
+        "task": "sms",
+        "description": "Flag incoming SMS messages that are spam so they never reach the inbox.",
+        "spec_emitted": false,
+        "inferred_primitive": null,
+        "correct_primitive": "classify",
+        "inference_agrees": false,
+        "pending": [
+          {
+            "slot": "task_primitive",
+            "must_ask": true,
+            "reason": "required"
+          }
+        ]
+      },
+      {
+        "task": "youtube_spam",
+        "description": "Flag spam comments posted on our YouTube videos so moderators see them first.",
+        "spec_emitted": false,
+        "inferred_primitive": null,
+        "correct_primitive": "classify",
+        "inference_agrees": false,
+        "pending": [
+          {
+            "slot": "task_primitive",
+            "must_ask": true,
+            "reason": "required"
+          }
+        ]
+      },
+      {
+        "task": "sentiment",
+        "description": "Sort short product and restaurant reviews into positive or negative sentiment.",
+        "spec_emitted": true,
+        "inferred_primitive": "classify",
+        "correct_primitive": "classify",
+        "inference_agrees": true,
+        "pending": [
+          {
+            "slot": "device_target",
+            "must_ask": false,
+            "reason": "decision"
+          }
+        ]
+      },
+      {
+        "task": "review_source",
+        "description": "Tell us which site a review sentence came from: amazon, imdb or yelp.",
+        "spec_emitted": false,
+        "inferred_primitive": null,
+        "correct_primitive": "classify",
+        "inference_agrees": false,
+        "pending": [
+          {
+            "slot": "task_primitive",
+            "must_ask": true,
+            "reason": "required"
+          }
+        ]
+      },
+      {
+        "task": "trec_questions",
+        "description": "Route an incoming question by the kind of answer it wants, so it reaches the right lookup: an abbreviation, a description, an entity, a person, a place or a number.",
+        "spec_emitted": true,
+        "inferred_primitive": "answer",
+        "correct_primitive": "classify",
+        "inference_agrees": false,
+        "pending": [
+          {
+            "slot": "abstention_policy",
+            "must_ask": true,
+            "reason": "required"
+          }
+        ]
+      }
+    ]
+  },
+  "compiler": {
+    "question": "does the compiler architecture work on tasks other than SMS spam",
+    "path": "FORGE interview answered, then MajesticCompiler.compile \u2014 Gate 1, planner, Gate 2, data factory, training, proving ground, Gate 3",
+    "quality_gate": 0.8,
+    "tasks": 5,
+    "admitted": 2,
+    "records": [
+      {
+        "task": "sms",
+        "note": "the published baseline, re-run here for comparability",
+        "quality_gate": 0.8,
+        "n_seed": 900,
+        "n_classes": 2,
+        "labels": [
+          "ham",
+          "spam"
+        ],
+        "admitted": true,
+        "stage_reached": "registry",
+        "refusal": "",
+        "cartridge_id": "f866804a2fecfce5dc6c64e48127b085",
+        "cache_hit": false,
+        "gates": [
+          {
+            "gate": "gate1_spec_admissibility",
+            "passed": true,
+            "reasons": []
+          },
+          {
+            "gate": "gate2_plan_feasibility",
+            "passed": true,
+            "reasons": []
+          },
+          {
+            "gate": "gate3_artefact_certification",
+            "passed": true,
+            "reasons": []
+          }
+        ],
+        "plan": {
+          "base_ref": "Qwen/Qwen3-1.7B",
+          "bit_width": "int8",
+          "quantiser": "int8",
+          "peft_method": "qlora",
+          "target": "gguf"
+        },
+        "held_out_accuracy": 0.9689,
+        "scorecard_from": "winner",
+        "n_held_out": 225,
+        "status": "certified",
+        "axes": [
+          {
+            "name": "task_metric",
+            "score": 0.9689,
+            "threshold": 0.8,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "calibrated_judge",
+            "score": 0.9689,
+            "threshold": 0.7000000000000001,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "behavioural",
+            "score": 1.0,
+            "threshold": 0.8,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "regression",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "safety",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "privacy",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "calibration",
+            "score": 0.5548,
+            "threshold": 0.85,
+            "passed": false,
+            "blocking": false
+          }
+        ],
+        "execution": {
+          "backend": "tfidf_centroid",
+          "runtime": "numpy",
+          "training": "centroid_fit",
+          "planned_base_executed": false,
+          "device_measured": false,
+          "scope": "local classifier demonstration; neural plan is analytical only"
+        },
+        "repair_attempts": 0,
+        "compile_seconds": 15.87
+      },
+      {
+        "task": "youtube_spam",
+        "note": "same task as the baseline, different customer and channel",
+        "quality_gate": 0.8,
+        "n_seed": 900,
+        "n_classes": 2,
+        "labels": [
+          "ham",
+          "spam"
+        ],
+        "admitted": true,
+        "stage_reached": "registry",
+        "refusal": "",
+        "cartridge_id": "44e29a187557729337ab0620d6be6938",
+        "cache_hit": false,
+        "gates": [
+          {
+            "gate": "gate1_spec_admissibility",
+            "passed": true,
+            "reasons": []
+          },
+          {
+            "gate": "gate2_plan_feasibility",
+            "passed": true,
+            "reasons": []
+          },
+          {
+            "gate": "gate3_artefact_certification",
+            "passed": true,
+            "reasons": []
+          }
+        ],
+        "plan": {
+          "base_ref": "Qwen/Qwen3-1.7B",
+          "bit_width": "int8",
+          "quantiser": "int8",
+          "peft_method": "qlora",
+          "target": "gguf"
+        },
+        "held_out_accuracy": 0.9244,
+        "scorecard_from": "winner",
+        "n_held_out": 225,
+        "status": "certified",
+        "axes": [
+          {
+            "name": "task_metric",
+            "score": 0.9244,
+            "threshold": 0.8,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "calibrated_judge",
+            "score": 0.9244,
+            "threshold": 0.7000000000000001,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "behavioural",
+            "score": 1.0,
+            "threshold": 0.8,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "regression",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "safety",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "privacy",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "calibration",
+            "score": 0.6063,
+            "threshold": 0.85,
+            "passed": false,
+            "blocking": false
+          }
+        ],
+        "execution": {
+          "backend": "tfidf_centroid",
+          "runtime": "numpy",
+          "training": "centroid_fit",
+          "planned_base_executed": false,
+          "device_measured": false,
+          "scope": "local classifier demonstration; neural plan is analytical only"
+        },
+        "repair_attempts": 0,
+        "compile_seconds": 13.71
+      },
+      {
+        "task": "sentiment",
+        "note": "a different task: polarity, not abuse",
+        "quality_gate": 0.8,
+        "n_seed": 900,
+        "n_classes": 2,
+        "labels": [
+          "negative",
+          "positive"
+        ],
+        "admitted": false,
+        "stage_reached": "prove",
+        "refusal": "no candidate cleared its gate; nothing is offered to the customer",
+        "cartridge_id": null,
+        "cache_hit": false,
+        "gates": [
+          {
+            "gate": "gate1_spec_admissibility",
+            "passed": true,
+            "reasons": []
+          },
+          {
+            "gate": "gate2_plan_feasibility",
+            "passed": true,
+            "reasons": []
+          }
+        ],
+        "plan": {
+          "base_ref": "Qwen/Qwen3-1.7B",
+          "bit_width": "int8",
+          "quantiser": "int8",
+          "peft_method": "qlora",
+          "target": "gguf"
+        },
+        "held_out_accuracy": 0.7067,
+        "scorecard_from": "rejected_candidate",
+        "n_held_out": 225,
+        "status": "refused",
+        "axes": [
+          {
+            "name": "task_metric",
+            "score": 0.7067,
+            "threshold": 0.8,
+            "passed": false,
+            "blocking": true
+          },
+          {
+            "name": "calibrated_judge",
+            "score": 0.7067,
+            "threshold": 0.7000000000000001,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "behavioural",
+            "score": 1.0,
+            "threshold": 0.8,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "regression",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "safety",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "privacy",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "calibration",
+            "score": 0.8033,
+            "threshold": 0.85,
+            "passed": false,
+            "blocking": false
+          }
+        ],
+        "execution": null,
+        "repair_attempts": 2,
+        "compile_seconds": 17.36
+      },
+      {
+        "task": "review_source",
+        "note": "three classes over the same text distribution as sentiment",
+        "quality_gate": 0.8,
+        "n_seed": 900,
+        "n_classes": 3,
+        "labels": [
+          "amazon",
+          "imdb",
+          "yelp"
+        ],
+        "admitted": false,
+        "stage_reached": "prove",
+        "refusal": "no candidate cleared its gate; nothing is offered to the customer",
+        "cartridge_id": null,
+        "cache_hit": false,
+        "gates": [
+          {
+            "gate": "gate1_spec_admissibility",
+            "passed": true,
+            "reasons": []
+          },
+          {
+            "gate": "gate2_plan_feasibility",
+            "passed": true,
+            "reasons": []
+          }
+        ],
+        "plan": {
+          "base_ref": "Qwen/Qwen3-1.7B",
+          "bit_width": "int8",
+          "quantiser": "int8",
+          "peft_method": "qlora",
+          "target": "gguf"
+        },
+        "held_out_accuracy": 0.68,
+        "scorecard_from": "rejected_candidate",
+        "n_held_out": 225,
+        "status": "refused",
+        "axes": [
+          {
+            "name": "task_metric",
+            "score": 0.68,
+            "threshold": 0.8,
+            "passed": false,
+            "blocking": true
+          },
+          {
+            "name": "calibrated_judge",
+            "score": 0.68,
+            "threshold": 0.7000000000000001,
+            "passed": false,
+            "blocking": false
+          },
+          {
+            "name": "behavioural",
+            "score": 1.0,
+            "threshold": 0.8,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "regression",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "safety",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "privacy",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "calibration",
+            "score": 0.666,
+            "threshold": 0.85,
+            "passed": false,
+            "blocking": false
+          }
+        ],
+        "execution": null,
+        "repair_attempts": 2,
+        "compile_seconds": 16.3
+      },
+      {
+        "task": "trec_questions",
+        "note": "six classes, and a label about the answer rather than the text",
+        "quality_gate": 0.8,
+        "n_seed": 900,
+        "n_classes": 6,
+        "labels": [
+          "ABBR",
+          "DESC",
+          "ENTY",
+          "HUM",
+          "LOC",
+          "NUM"
+        ],
+        "admitted": false,
+        "stage_reached": "prove",
+        "refusal": "no candidate cleared its gate; nothing is offered to the customer",
+        "cartridge_id": null,
+        "cache_hit": false,
+        "gates": [
+          {
+            "gate": "gate1_spec_admissibility",
+            "passed": true,
+            "reasons": []
+          },
+          {
+            "gate": "gate2_plan_feasibility",
+            "passed": true,
+            "reasons": []
+          }
+        ],
+        "plan": {
+          "base_ref": "Qwen/Qwen3-1.7B",
+          "bit_width": "int8",
+          "quantiser": "int8",
+          "peft_method": "qlora",
+          "target": "gguf"
+        },
+        "held_out_accuracy": 0.5911,
+        "scorecard_from": "rejected_candidate",
+        "n_held_out": 225,
+        "status": "refused",
+        "axes": [
+          {
+            "name": "task_metric",
+            "score": 0.5911,
+            "threshold": 0.8,
+            "passed": false,
+            "blocking": true
+          },
+          {
+            "name": "calibrated_judge",
+            "score": 0.5911,
+            "threshold": 0.7000000000000001,
+            "passed": false,
+            "blocking": false
+          },
+          {
+            "name": "behavioural",
+            "score": 1.0,
+            "threshold": 0.8,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "regression",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": false
+          },
+          {
+            "name": "safety",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "privacy",
+            "score": 1.0,
+            "threshold": 1.0,
+            "passed": true,
+            "blocking": true
+          },
+          {
+            "name": "calibration",
+            "score": 0.5961,
+            "threshold": 0.85,
+            "passed": false,
+            "blocking": false
+          }
+        ],
+        "execution": null,
+        "repair_attempts": 2,
+        "compile_seconds": 17.61
+      }
+    ]
+  },
+  "quality_gate": {
+    "question": "when the proving ground refuses, is it the threshold or the architecture that refused",
+    "method": "recompile the same corpus at a quality gate the measured held-out accuracy clears",
+    "records": [
+      {
+        "task": "sentiment",
+        "refused_at_gate": 0.8,
+        "measured_accuracy": 0.7067,
+        "relaxed_gate": 0.65,
+        "admitted_at_relaxed_gate": true,
+        "stage_reached": "registry",
+        "refusal": "",
+        "held_out_accuracy": 0.7422
+      },
+      {
+        "task": "review_source",
+        "refused_at_gate": 0.8,
+        "measured_accuracy": 0.68,
+        "relaxed_gate": 0.6,
+        "admitted_at_relaxed_gate": true,
+        "stage_reached": "registry",
+        "refusal": "",
+        "held_out_accuracy": 0.7422
+      },
+      {
+        "task": "trec_questions",
+        "refused_at_gate": 0.8,
+        "measured_accuracy": 0.5911,
+        "relaxed_gate": 0.5,
+        "admitted_at_relaxed_gate": true,
+        "stage_reached": "registry",
+        "refusal": "",
+        "held_out_accuracy": 0.6
+      }
+    ]
+  },
+  "protocol": {
+    "question": "do the paper's numbers hold on other tasks under the same protocol",
+    "protocol": "3 fixed stratified 80/20 splits; majority/centroid/knn x none/int8/int4; identical to the published run",
+    "limits": "split replicates overlap, so the spread across seeds is not an independent-sample confidence statement",
+    "per_task": [
+      {
+        "task": "sms",
+        "note": "the published baseline, re-run here for comparability",
+        "n_rows": 5159,
+        "n_classes": 2,
+        "majority_accuracy": 0.8758486905916586,
+        "centroid_none": {
+          "accuracy_mean": 0.9453604914322664,
+          "accuracy_min": 0.944713870029098,
+          "accuracy_max": 0.9466537342386033,
+          "macro_f1_mean": 0.8894153714986153,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 0.6659833403925101,
+          "accuracy_ci95_seed0": [
+            0.9290413452140974,
+            0.9570847296389665
+          ]
+        },
+        "centroid_int8": {
+          "accuracy_mean": 0.9443905593275137,
+          "accuracy_min": 0.9437439379243453,
+          "accuracy_max": 0.9456838021338506,
+          "macro_f1_mean": 0.8879696030570647,
+          "flip_rate_mean": 0.0022631749110895573,
+          "warm_p50_ms_mean": 1.1934166735348601,
+          "accuracy_ci95_seed0": [
+            0.9279618242721713,
+            0.9562315873860111
+          ]
+        },
+        "centroid_int4": {
+          "accuracy_mean": 0.9256385386356288,
+          "accuracy_min": 0.9224054316197866,
+          "accuracy_max": 0.9311348205625606,
+          "macro_f1_mean": 0.8550570155641107,
+          "flip_rate_mean": 0.028128031037827354,
+          "warm_p50_ms_mean": 0.9068666646877924,
+          "accuracy_ci95_seed0": [
+            0.9044621583286547,
+            0.9372126630421398
+          ]
+        },
+        "knn_none": {
+          "accuracy_mean": 0.9718719689621726,
+          "accuracy_min": 0.965082444228904,
+          "accuracy_max": 0.979631425800194,
+          "macro_f1_mean": 0.9299237428988564,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 4.0671833169957,
+          "accuracy_ci95_seed0": [
+            0.9587651570157827,
+            0.9795428240990753
+          ]
+        },
+        "knn_int8": {
+          "accuracy_mean": 0.9712253475590042,
+          "accuracy_min": 0.965082444228904,
+          "accuracy_max": 0.9786614936954413,
+          "macro_f1_mean": 0.9281825098138684,
+          "flip_rate_mean": 0.0006466214031684449,
+          "warm_p50_ms_mean": 109.89469998942998,
+          "accuracy_ci95_seed0": [
+            0.9576376462671529,
+            0.9787376716528241
+          ]
+        },
+        "knn_int4": {
+          "accuracy_mean": 0.9705787261558357,
+          "accuracy_min": 0.962172647914646,
+          "accuracy_max": 0.9786614936954413,
+          "macro_f1_mean": 0.9266573766194601,
+          "flip_rate_mean": 0.007112835434852894,
+          "warm_p50_ms_mean": 212.06126666705435,
+          "accuracy_ci95_seed0": [
+            0.9587651570157827,
+            0.9795428240990753
+          ]
+        },
+        "lift_over_majority": 0.06951180084060782
+      },
+      {
+        "task": "youtube_spam",
+        "note": "same task as the baseline, different customer and channel",
+        "n_rows": 1741,
+        "n_classes": 2,
+        "majority_accuracy": 0.5187319884726225,
+        "centroid_none": {
+          "accuracy_mean": 0.9058597502401536,
+          "accuracy_min": 0.8904899135446686,
+          "accuracy_max": 0.9221902017291066,
+          "macro_f1_mean": 0.9057872702576452,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 0.6346333442100635,
+          "accuracy_ci95_seed0": [
+            0.8891590952208877,
+            0.9459759569045927
+          ]
+        },
+        "centroid_int8": {
+          "accuracy_mean": 0.9068203650336215,
+          "accuracy_min": 0.8933717579250721,
+          "accuracy_max": 0.9221902017291066,
+          "macro_f1_mean": 0.9067334177536492,
+          "flip_rate_mean": 0.002881844380403458,
+          "warm_p50_ms_mean": 0.6067499925848097,
+          "accuracy_ci95_seed0": [
+            0.8891590952208877,
+            0.9459759569045927
+          ]
+        },
+        "centroid_int4": {
+          "accuracy_mean": 0.9087415946205571,
+          "accuracy_min": 0.8933717579250721,
+          "accuracy_max": 0.9193083573487032,
+          "macro_f1_mean": 0.9085793374067973,
+          "flip_rate_mean": 0.027857829010566763,
+          "warm_p50_ms_mean": 0.47529999089116853,
+          "accuracy_ci95_seed0": [
+            0.8858502834044604,
+            0.9435841881604368
+          ]
+        },
+        "knn_none": {
+          "accuracy_mean": 0.899135446685879,
+          "accuracy_min": 0.8904899135446686,
+          "accuracy_max": 0.9048991354466859,
+          "macro_f1_mean": 0.8988758760160127,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 1.2584333405053865,
+          "accuracy_ci95_seed0": [
+            0.8694510657343363,
+            0.9314805030276433
+          ]
+        },
+        "knn_int8": {
+          "accuracy_mean": 0.899135446685879,
+          "accuracy_min": 0.8904899135446686,
+          "accuracy_max": 0.9048991354466859,
+          "macro_f1_mean": 0.8988960569165595,
+          "flip_rate_mean": 0.0019212295869356388,
+          "warm_p50_ms_mean": 18.790733340817194,
+          "accuracy_ci95_seed0": [
+            0.8661974179455676,
+            0.9290335702558283
+          ]
+        },
+        "knn_int4": {
+          "accuracy_mean": 0.8981748318924112,
+          "accuracy_min": 0.8818443804034583,
+          "accuracy_max": 0.9250720461095101,
+          "macro_f1_mean": 0.8979988819695726,
+          "flip_rate_mean": 0.0393852065321806,
+          "warm_p50_ms_mean": 33.519633318064734,
+          "accuracy_ci95_seed0": [
+            0.8500427125676779,
+            0.9166853728308009
+          ]
+        },
+        "lift_over_majority": 0.38712776176753116
+      },
+      {
+        "task": "sentiment",
+        "note": "a different task: polarity, not abuse",
+        "n_rows": 2979,
+        "n_classes": 2,
+        "majority_accuracy": 0.5008403361344538,
+        "centroid_none": {
+          "accuracy_mean": 0.7490196078431373,
+          "accuracy_min": 0.7310924369747899,
+          "accuracy_max": 0.761344537815126,
+          "macro_f1_mean": 0.7485188548941751,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 0.40186667077553767,
+          "accuracy_ci95_seed0": [
+            0.7254865336941344,
+            0.793849586774973
+          ]
+        },
+        "centroid_int8": {
+          "accuracy_mean": 0.746218487394958,
+          "accuracy_min": 0.7277310924369748,
+          "accuracy_max": 0.7563025210084033,
+          "macro_f1_mean": 0.7457487097361688,
+          "flip_rate_mean": 0.014005602240896359,
+          "warm_p50_ms_mean": 0.4022333208316316,
+          "accuracy_ci95_seed0": [
+            0.7202343847337753,
+            0.7890823893597221
+          ]
+        },
+        "centroid_int4": {
+          "accuracy_mean": 0.680672268907563,
+          "accuracy_min": 0.6756302521008404,
+          "accuracy_max": 0.6873949579831933,
+          "macro_f1_mean": 0.6767021223018351,
+          "flip_rate_mean": 0.16358543417366947,
+          "warm_p50_ms_mean": 0.5396000148418049,
+          "accuracy_ci95_seed0": [
+            0.6490461016652628,
+            0.7233396052949009
+          ]
+        },
+        "knn_none": {
+          "accuracy_mean": 0.7316526610644257,
+          "accuracy_min": 0.692436974789916,
+          "accuracy_max": 0.7630252100840336,
+          "macro_f1_mean": 0.7311339937557754,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 1.9955666599950443,
+          "accuracy_ci95_seed0": [
+            0.7272386890861274,
+            0.7954372135081832
+          ]
+        },
+        "knn_int8": {
+          "accuracy_mean": 0.7288515406162465,
+          "accuracy_min": 0.6907563025210084,
+          "accuracy_max": 0.7546218487394958,
+          "macro_f1_mean": 0.7283322131975407,
+          "flip_rate_mean": 0.009523809523809523,
+          "warm_p50_ms_mean": 36.91090000211261,
+          "accuracy_ci95_seed0": [
+            0.7184850906301807,
+            0.7874919013381134
+          ]
+        },
+        "knn_int4": {
+          "accuracy_mean": 0.7355742296918768,
+          "accuracy_min": 0.7142857142857143,
+          "accuracy_max": 0.7680672268907563,
+          "macro_f1_mean": 0.7349975372604384,
+          "flip_rate_mean": 0.09915966386554621,
+          "warm_p50_ms_mean": 68.93808332582314,
+          "accuracy_ci95_seed0": [
+            0.7324995459255366,
+            0.800195703044384
+          ]
+        },
+        "lift_over_majority": 0.24817927170868348
+      },
+      {
+        "task": "review_source",
+        "note": "three classes over the same text distribution as sentiment",
+        "n_rows": 2978,
+        "n_classes": 3,
+        "majority_accuracy": 0.334453781512605,
+        "centroid_none": {
+          "accuracy_mean": 0.7450980392156863,
+          "accuracy_min": 0.7277310924369748,
+          "accuracy_max": 0.7579831932773109,
+          "macro_f1_mean": 0.7450561031643393,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 0.49471666958803934,
+          "accuracy_ci95_seed0": [
+            0.7219843866206596,
+            0.7906721695980411
+          ]
+        },
+        "centroid_int8": {
+          "accuracy_mean": 0.7484593837535014,
+          "accuracy_min": 0.7344537815126051,
+          "accuracy_max": 0.7563025210084033,
+          "macro_f1_mean": 0.7483910192254548,
+          "flip_rate_mean": 0.013445378151260505,
+          "warm_p50_ms_mean": 0.5175333256678035,
+          "accuracy_ci95_seed0": [
+            0.7202343847337753,
+            0.7890823893597221
+          ]
+        },
+        "centroid_int4": {
+          "accuracy_mean": 0.6929971988795518,
+          "accuracy_min": 0.6739495798319328,
+          "accuracy_max": 0.7058823529411765,
+          "macro_f1_mean": 0.6931257899884659,
+          "flip_rate_mean": 0.17142857142857143,
+          "warm_p50_ms_mean": 0.598683322702224,
+          "accuracy_ci95_seed0": [
+            0.6680439838890043,
+            0.7410793264483954
+          ]
+        },
+        "knn_none": {
+          "accuracy_mean": 0.7131652661064426,
+          "accuracy_min": 0.6890756302521008,
+          "accuracy_max": 0.7344537815126051,
+          "macro_f1_mean": 0.712832558277411,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 1.9293833271755527,
+          "accuracy_ci95_seed0": [
+            0.6507703140504713,
+            0.7249551750348957
+          ]
+        },
+        "knn_int8": {
+          "accuracy_mean": 0.7120448179271709,
+          "accuracy_min": 0.6873949579831933,
+          "accuracy_max": 0.7294117647058823,
+          "macro_f1_mean": 0.7117457770309599,
+          "flip_rate_mean": 0.008963585434173669,
+          "warm_p50_ms_mean": 36.45118333709737,
+          "accuracy_ci95_seed0": [
+            0.6490461016652628,
+            0.7233396052949009
+          ]
+        },
+        "knn_int4": {
+          "accuracy_mean": 0.7170868347338936,
+          "accuracy_min": 0.7075630252100841,
+          "accuracy_max": 0.7243697478991596,
+          "macro_f1_mean": 0.7169474609434107,
+          "flip_rate_mean": 0.1103641456582633,
+          "warm_p50_ms_mean": 68.76628333702683,
+          "accuracy_ci95_seed0": [
+            0.6697745651516985,
+            0.7426885273109044
+          ]
+        },
+        "lift_over_majority": 0.4106442577030813
+      },
+      {
+        "task": "trec_questions",
+        "note": "six classes, and a label about the answer rather than the text",
+        "n_rows": 5380,
+        "n_classes": 6,
+        "majority_accuracy": 0.23184357541899442,
+        "centroid_none": {
+          "accuracy_mean": 0.6409062693978895,
+          "accuracy_min": 0.6378026070763501,
+          "accuracy_max": 0.6424581005586593,
+          "macro_f1_mean": 0.6152237974833561,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 0.8130666780440757,
+          "accuracy_ci95_seed0": [
+            0.6133333238996471,
+            0.6705674274546439
+          ]
+        },
+        "centroid_int8": {
+          "accuracy_mean": 0.6405959031657356,
+          "accuracy_min": 0.6378026070763501,
+          "accuracy_max": 0.6424581005586593,
+          "macro_f1_mean": 0.6148773450215774,
+          "flip_rate_mean": 0.0111731843575419,
+          "warm_p50_ms_mean": 1.0590666594604652,
+          "accuracy_ci95_seed0": [
+            0.6133333238996471,
+            0.6705674274546439
+          ]
+        },
+        "centroid_int4": {
+          "accuracy_mean": 0.6185599006828058,
+          "accuracy_min": 0.6145251396648045,
+          "accuracy_max": 0.6266294227188082,
+          "macro_f1_mean": 0.5933081387433163,
+          "flip_rate_mean": 0.1288019863438858,
+          "warm_p50_ms_mean": 1.2867666664533317,
+          "accuracy_ci95_seed0": [
+            0.5850579226752022,
+            0.6431760146880512
+          ]
+        },
+        "knn_none": {
+          "accuracy_mean": 0.6722532588454376,
+          "accuracy_min": 0.638733705772812,
+          "accuracy_max": 0.6945996275605214,
+          "macro_f1_mean": 0.6688133388138795,
+          "flip_rate_mean": 0.0,
+          "warm_p50_ms_mean": 4.047099985958387,
+          "accuracy_ci95_seed0": [
+            0.6549964199890386,
+            0.7105489918854406
+          ]
+        },
+        "knn_int8": {
+          "accuracy_mean": 0.6725636250775916,
+          "accuracy_min": 0.6443202979515829,
+          "accuracy_max": 0.6936685288640596,
+          "macro_f1_mean": 0.6703507474126521,
+          "flip_rate_mean": 0.007138423339540658,
+          "warm_p50_ms_mean": 105.59399999328889,
+          "accuracy_ci95_seed0": [
+            0.6511989757170575,
+            0.70692419429195
+          ]
+        },
+        "knn_int4": {
+          "accuracy_mean": 0.6744258224705152,
+          "accuracy_min": 0.6610800744878957,
+          "accuracy_max": 0.6852886405959032,
+          "macro_f1_mean": 0.6749623598388126,
+          "flip_rate_mean": 0.11824953445065177,
+          "warm_p50_ms_mean": 206.52291665707403,
+          "accuracy_ci95_seed0": [
+            0.6483522252039581,
+            0.7042042634059457
+          ]
+        },
+        "lift_over_majority": 0.4090626939788951
+      }
+    ]
+  },
+  "transfer": {
+    "question": "does a model built on one customer's data hold up on another's",
+    "method": "fit on a held-out split of the source corpus, then test that same fitted model on every target row whose label it can emit",
+    "pairs_available": [
+      [
+        "sms",
+        "youtube_spam"
+      ],
+      [
+        "youtube_spam",
+        "sms"
+      ]
+    ],
+    "pairs_skipped_reason": "transfer needs a shared label set; the sentiment, source-attribution and question-type corpora share no labels with the spam corpora or with each other",
+    "largest_accuracy_drop": 0.4327055980291603,
+    "records": [
+      {
+        "source": "sms",
+        "target": "youtube_spam",
+        "method": "centroid",
+        "shared_labels": [
+          "ham",
+          "spam"
+        ],
+        "n_train": 4128,
+        "in_domain": {
+          "accuracy": 0.944713870029098,
+          "macro_f1": 0.8891316282465602,
+          "accuracy_ci95": [
+            0.9290413452140974,
+            0.9570847296389665
+          ],
+          "n_test": 1031
+        },
+        "out_of_domain": {
+          "accuracy": 0.5898908673176335,
+          "macro_f1": 0.5431272493119752,
+          "accuracy_ci95": [
+            0.5666137160803502,
+            0.6127722094532801
+          ],
+          "n_test": 1741,
+          "labels": [
+            "ham",
+            "spam"
+          ],
+          "confusion_matrix": [
+            [
+              792,
+              112
+            ],
+            [
+              602,
+              235
+            ]
+          ]
+        },
+        "accuracy_drop": 0.3548230027114645,
+        "macro_f1_drop": 0.346004378934585
+      },
+      {
+        "source": "sms",
+        "target": "youtube_spam",
+        "method": "knn",
+        "shared_labels": [
+          "ham",
+          "spam"
+        ],
+        "n_train": 4128,
+        "in_domain": {
+          "accuracy": 0.9709020368574199,
+          "macro_f1": 0.928226001076726,
+          "accuracy_ci95": [
+            0.9587651570157827,
+            0.9795428240990753
+          ],
+          "n_test": 1031
+        },
+        "out_of_domain": {
+          "accuracy": 0.5381964388282596,
+          "macro_f1": 0.4102184245120841,
+          "accuracy_ci95": [
+            0.5147200971737311,
+            0.5615045932287379
+          ],
+          "n_test": 1741,
+          "labels": [
+            "ham",
+            "spam"
+          ],
+          "confusion_matrix": [
+            [
+              874,
+              30
+            ],
+            [
+              774,
+              63
+            ]
+          ]
+        },
+        "accuracy_drop": 0.4327055980291603,
+        "macro_f1_drop": 0.5180075765646419
+      },
+      {
+        "source": "youtube_spam",
+        "target": "sms",
+        "method": "centroid",
+        "shared_labels": [
+          "ham",
+          "spam"
+        ],
+        "n_train": 1394,
+        "in_domain": {
+          "accuracy": 0.9221902017291066,
+          "macro_f1": 0.922125526768571,
+          "accuracy_ci95": [
+            0.8891590952208877,
+            0.9459759569045927
+          ],
+          "n_test": 347
+        },
+        "out_of_domain": {
+          "accuracy": 0.5435161853072301,
+          "macro_f1": 0.47797528686568364,
+          "accuracy_ci95": [
+            0.5298967977221295,
+            0.5570708156708569
+          ],
+          "n_test": 5159,
+          "labels": [
+            "ham",
+            "spam"
+          ],
+          "confusion_matrix": [
+            [
+              2316,
+              2201
+            ],
+            [
+              154,
+              488
+            ]
+          ]
+        },
+        "accuracy_drop": 0.3786740164218765,
+        "macro_f1_drop": 0.4441502399028873
+      },
+      {
+        "source": "youtube_spam",
+        "target": "sms",
+        "method": "knn",
+        "shared_labels": [
+          "ham",
+          "spam"
+        ],
+        "n_train": 1394,
+        "in_domain": {
+          "accuracy": 0.9048991354466859,
+          "macro_f1": 0.9047440792593147,
+          "accuracy_ci95": [
+            0.8694510657343363,
+            0.9314805030276433
+          ],
+          "n_test": 347
+        },
+        "out_of_domain": {
+          "accuracy": 0.6076759061833689,
+          "macro_f1": 0.5010375085726344,
+          "accuracy_ci95": [
+            0.5942768369862426,
+            0.620914740919343
+          ],
+          "n_test": 5159,
+          "labels": [
+            "ham",
+            "spam"
+          ],
+          "confusion_matrix": [
+            [
+              2760,
+              1757
+            ],
+            [
+              267,
+              375
+            ]
+          ]
+        },
+        "accuracy_drop": 0.297223229263317,
+        "macro_f1_drop": 0.40370657068668026
+      }
+    ]
+  },
+  "findings": [
+    "FORGE emitted a spec unaided for 2 of 5 descriptions, and inferred the right primitive for 1; the rest it insisted on asking",
+    "with the interview answered the compiler admitted 2 of 5 tasks through the full gated path at a 0.80 quality gate",
+    "sentiment refused at prove: no candidate cleared its gate; nothing is offered to the customer",
+    "review_source refused at prove: no candidate cleared its gate; nothing is offered to the customer",
+    "trec_questions refused at prove: no candidate cleared its gate; nothing is offered to the customer",
+    "sentiment measured 0.707; at a 0.65 gate it is admitted \u2014 the threshold refused it, not the architecture",
+    "review_source measured 0.680; at a 0.60 gate it is admitted \u2014 the threshold refused it, not the architecture",
+    "trec_questions measured 0.591; at a 0.50 gate it is admitted \u2014 the threshold refused it, not the architecture",
+    "sms (2 classes): centroid fp32 0.945, majority 0.876, lift +0.070",
+    "youtube_spam (2 classes): centroid fp32 0.906, majority 0.519, lift +0.387",
+    "sentiment (2 classes): centroid fp32 0.749, majority 0.501, lift +0.248",
+    "review_source (3 classes): centroid fp32 0.745, majority 0.334, lift +0.411",
+    "trec_questions (6 classes): centroid fp32 0.641, majority 0.232, lift +0.409",
+    "int4 answer-flip rate across tasks: 0.0279 to 0.1714",
+    "sms -> youtube_spam (centroid): accuracy falls 0.945 to 0.590 (+0.355) on data the build never saw",
+    "sms -> youtube_spam (knn): accuracy falls 0.971 to 0.538 (+0.433) on data the build never saw",
+    "youtube_spam -> sms (centroid): accuracy falls 0.922 to 0.544 (+0.379) on data the build never saw",
+    "youtube_spam -> sms (knn): accuracy falls 0.905 to 0.608 (+0.297) on data the build never saw"
+  ]
+}
