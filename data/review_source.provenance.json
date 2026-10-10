@@ -1,0 +1,21 @@
+{
+  "dataset": "UCI Sentiment Labelled Sentences, relabelled by source site",
+  "url": "https://archive.ics.uci.edu/static/public/331/sentiment+labelled+sentences.zip",
+  "citation": "https://doi.org/10.24432/C57604",
+  "license": "CC BY 4.0 (UCI listing)",
+  "task": "three-class source attribution (DERIVED, not a published benchmark)",
+  "derived": true,
+  "download_sha256": "afc26626d710899948693e1a61405dce197f57ffa719fa1130d346b4cc095343",
+  "raw_rows": 3000,
+  "unique_rows": 2978,
+  "conflicting_groups": 1,
+  "removed_rows": 22,
+  "dataset_sha256": "3eadca9a4d060ba59d885297a88e73ce7426096a1b9a2c342998318b66cb6dbd",
+  "labels": {
+    "amazon": 986,
+    "imdb": 996,
+    "yelp": 996
+  },
+  "n_classes": 3,
+  "preprocessing": "casefold and whitespace key; deduplicate; discard conflicting groups"
+}
