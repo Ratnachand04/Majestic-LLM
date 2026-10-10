@@ -1,0 +1,19 @@
+{
+  "dataset": "UCI YouTube Spam Collection",
+  "url": "https://archive.ics.uci.edu/static/public/380/youtube+spam+collection.zip",
+  "citation": "https://doi.org/10.24432/C58885",
+  "license": "CC BY 4.0 (UCI listing)",
+  "task": "binary comment-spam detection",
+  "download_sha256": "bd6182891adb3cfc8334b82c062176dfbebc563bf0ba07e31c2645f916865a0a",
+  "raw_rows": 1956,
+  "unique_rows": 1741,
+  "conflicting_groups": 0,
+  "removed_rows": 215,
+  "dataset_sha256": "0baa2279be5fbba5396556c5f0ddb99d06b463ba8efdffacec4cd24ecf3cb96e",
+  "labels": {
+    "ham": 904,
+    "spam": 837
+  },
+  "n_classes": 2,
+  "preprocessing": "casefold and whitespace key; deduplicate; discard conflicting groups"
+}
