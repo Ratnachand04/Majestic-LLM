@@ -50,6 +50,11 @@ select = ["E", "F", "I", "W", "UP", "B"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+# Collect only the real suite. Release smoke-tests unpack a copy of the repo
+# under outputs/, and pytest reads .gitignore for nothing — it would import
+# that copy's conftest under the same module name as this one and abort the
+# whole run on the collision.
+testpaths = ["tests"]
 addopts = "-q -m 'not integration'"
 markers = [
     "integration: tests that need heavy deps, network, or a GPU (skipped by default)",
