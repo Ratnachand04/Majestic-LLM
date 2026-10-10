@@ -1,0 +1,23 @@
+{
+  "dataset": "TREC question classification (coarse labels)",
+  "url": "https://cogcomp.seas.upenn.edu/Data/QA/QC/train_5500.label",
+  "citation": "Li and Roth, COLING 2002; Hovy et al., HLT 2001",
+  "license": "public research distribution (UIUC CogComp)",
+  "task": "six-class question answer-type classification",
+  "download_sha256": "9e4c8bdcaffb96ed61041bd64b564183d52793a8e91d84fc3a8646885f466ec3",
+  "raw_rows": 5452,
+  "unique_rows": 5380,
+  "conflicting_groups": 0,
+  "removed_rows": 72,
+  "dataset_sha256": "b2fe2b37649947ea7a321a831e9fdcf82752cde27f125b759247d8908cbd6142",
+  "labels": {
+    "ABBR": 86,
+    "DESC": 1152,
+    "ENTY": 1245,
+    "HUM": 1215,
+    "LOC": 824,
+    "NUM": 858
+  },
+  "n_classes": 6,
+  "preprocessing": "casefold and whitespace key; deduplicate; discard conflicting groups"
+}
