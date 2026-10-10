@@ -1,0 +1,19 @@
+{
+  "dataset": "UCI Sentiment Labelled Sentences",
+  "url": "https://archive.ics.uci.edu/static/public/331/sentiment+labelled+sentences.zip",
+  "citation": "https://doi.org/10.24432/C57604",
+  "license": "CC BY 4.0 (UCI listing)",
+  "task": "binary sentiment polarity",
+  "download_sha256": "afc26626d710899948693e1a61405dce197f57ffa719fa1130d346b4cc095343",
+  "raw_rows": 3000,
+  "unique_rows": 2979,
+  "conflicting_groups": 0,
+  "removed_rows": 21,
+  "dataset_sha256": "5d27351b7c4cfaf45c753b76e392c0e8cced8f5678819d23b69479a3cf44ba33",
+  "labels": {
+    "negative": 1491,
+    "positive": 1488
+  },
+  "n_classes": 2,
+  "preprocessing": "casefold and whitespace key; deduplicate; discard conflicting groups"
+}
