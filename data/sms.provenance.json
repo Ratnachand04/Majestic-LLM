@@ -1,0 +1,17 @@
+{
+  "dataset": "UCI SMS Spam Collection",
+  "url": "https://archive.ics.uci.edu/static/public/228/sms+spam+collection.zip",
+  "citation": "https://doi.org/10.24432/C5CC84",
+  "license": "CC BY 4.0 (UCI listing)",
+  "download_sha256": "1587ea43e58e82b14ff1f5425c88e17f8496bfcdb67a583dbff9eefaf9963ce3",
+  "dataset_sha256": "80f4c4d8c2ef4d98e51d65911867122643275ece6fd9c33e77f268f43cab21cf",
+  "raw_rows": 5574,
+  "unique_rows": 5159,
+  "conflicting_groups": 0,
+  "removed_rows": 415,
+  "labels": {
+    "ham": 4517,
+    "spam": 642
+  },
+  "preprocessing": "casefold and whitespace key; deduplicate; discard conflicting groups"
+}
