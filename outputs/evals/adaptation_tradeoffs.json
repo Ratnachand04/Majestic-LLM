@@ -1,0 +1,629 @@
+{
+  "study": "LoRA against QLoRA \u2014 accuracy, size, latency, memory, energy",
+  "reviewer_item": "provide a comparative evaluation of LoRA and QLoRA in terms of accuracy, model size, inference latency and memory consumption, and include energy measurements where feasible",
+  "quality": {
+    "status": "MEASURED",
+    "rows": [
+      {
+        "id": "sms_spam-lora-05570710f90c0662f841d428",
+        "method": "lora",
+        "seed": 1,
+        "accuracy": 0.9893307468477207,
+        "macro_f1": 0.9748780006955566,
+        "n_test": 1031,
+        "accuracy_ci95": [
+          0.980996428479561,
+          0.9940321533380413
+        ],
+        "post_quantisation": false,
+        "answer_flip_rate": null,
+        "train_loss": 0.04335887529899292
+      },
+      {
+        "id": "sms_spam-lora-5ecbcc0dc970fe853f3927e4",
+        "method": "lora",
+        "seed": 2,
+        "accuracy": 0.98545101842871,
+        "macro_f1": 0.9659781635468068,
+        "n_test": 1031,
+        "accuracy_ci95": [
+          0.9761343619177114,
+          0.9911635671203658
+        ],
+        "post_quantisation": false,
+        "answer_flip_rate": null,
+        "train_loss": 0.043342113485246976
+      },
+      {
+        "id": "sms_spam-lora-916188c8f1a69177126c1dd9",
+        "method": "lora",
+        "seed": 0,
+        "accuracy": 0.991270611057226,
+        "macro_f1": 0.9798626257365148,
+        "n_test": 1031,
+        "accuracy_ci95": [
+          0.9834931806419169,
+          0.995400727565448
+        ],
+        "post_quantisation": false,
+        "answer_flip_rate": null,
+        "train_loss": 0.04698205120303218
+      },
+      {
+        "id": "sms_spam-qlora-a5512e8be785c14da0c986e0",
+        "method": "qlora",
+        "seed": 0,
+        "accuracy": 0.991270611057226,
+        "macro_f1": 0.9798626257365148,
+        "n_test": 1031,
+        "accuracy_ci95": [
+          0.9834931806419169,
+          0.995400727565448
+        ],
+        "post_quantisation": true,
+        "answer_flip_rate": 0.0019398642095053346,
+        "train_loss": 0.048057396378782063
+      }
+    ],
+    "lora_seeds": 3,
+    "qlora_seeds": 1,
+    "lora_accuracy_range": [
+      0.98545101842871,
+      0.991270611057226
+    ],
+    "lora_accuracy_mean": 0.9886841254445522,
+    "qlora_accuracy": 0.991270611057226,
+    "qlora_within_lora_range": true,
+    "prediction_agreement": {
+      "seed": 0,
+      "n": 1031,
+      "same_test_rows": true,
+      "discordant_predictions": 0,
+      "identical": true,
+      "mcnemar_applicable": false,
+      "reading": "the two methods produced the same label on every test row, so no accuracy difference exists to test"
+    },
+    "limits": "one QLoRA seed against three LoRA seeds; this can show that QLoRA lands inside the LoRA spread, and cannot estimate a difference between the methods"
+  },
+  "size": {
+    "status": "MEASURED",
+    "rows": [
+      {
+        "id": "sms_spam-lora-05570710f90c0662f841d428",
+        "method": "lora",
+        "seed": 1,
+        "deployment_quantisation": "none",
+        "adapter": {
+          "trainable_parameters": 739586,
+          "tensors": 28,
+          "dtypes": {
+            "F32": 24,
+            "BF16": 4
+          },
+          "tensor_bytes": 1774084,
+          "file_bytes": 1777948
+        },
+        "merged_model": {
+          "parameters": 66955010,
+          "dtypes": {
+            "BF16": 104
+          },
+          "tensor_bytes": 133910020
+        },
+        "quantised_deployment": {
+          "present": false,
+          "tensors": 0,
+          "dtypes": {},
+          "tensor_bytes": 0,
+          "by_group": {}
+        },
+        "directory_bytes": {
+          "adapter": 1784430,
+          "model": 134867669,
+          "deploy": 134867669,
+          "quantized": 0
+        },
+        "shipped_bytes": 134867669
+      },
+      {
+        "id": "sms_spam-lora-5ecbcc0dc970fe853f3927e4",
+        "method": "lora",
+        "seed": 2,
+        "deployment_quantisation": "none",
+        "adapter": {
+          "trainable_parameters": 739586,
+          "tensors": 28,
+          "dtypes": {
+            "F32": 24,
+            "BF16": 4
+          },
+          "tensor_bytes": 1774084,
+          "file_bytes": 1777948
+        },
+        "merged_model": {
+          "parameters": 66955010,
+          "dtypes": {
+            "BF16": 104
+          },
+          "tensor_bytes": 133910020
+        },
+        "quantised_deployment": {
+          "present": false,
+          "tensors": 0,
+          "dtypes": {},
+          "tensor_bytes": 0,
+          "by_group": {}
+        },
+        "directory_bytes": {
+          "adapter": 1784430,
+          "model": 134867669,
+          "deploy": 134867669,
+          "quantized": 0
+        },
+        "shipped_bytes": 134867669
+      },
+      {
+        "id": "sms_spam-lora-916188c8f1a69177126c1dd9",
+        "method": "lora",
+        "seed": 0,
+        "deployment_quantisation": "none",
+        "adapter": {
+          "trainable_parameters": 739586,
+          "tensors": 28,
+          "dtypes": {
+            "F32": 24,
+            "BF16": 4
+          },
+          "tensor_bytes": 1774084,
+          "file_bytes": 1777948
+        },
+        "merged_model": {
+          "parameters": 66955010,
+          "dtypes": {
+            "BF16": 104
+          },
+          "tensor_bytes": 133910020
+        },
+        "quantised_deployment": {
+          "present": false,
+          "tensors": 0,
+          "dtypes": {},
+          "tensor_bytes": 0,
+          "by_group": {}
+        },
+        "directory_bytes": {
+          "adapter": 1784430,
+          "model": 134867669,
+          "deploy": 134867669,
+          "quantized": 0
+        },
+        "shipped_bytes": 134867669
+      },
+      {
+        "id": "sms_spam-qlora-a5512e8be785c14da0c986e0",
+        "method": "qlora",
+        "seed": 0,
+        "deployment_quantisation": "int4",
+        "adapter": {
+          "trainable_parameters": 739586,
+          "tensors": 28,
+          "dtypes": {
+            "F32": 28
+          },
+          "tensor_bytes": 2958344,
+          "file_bytes": 2962192
+        },
+        "merged_model": {
+          "parameters": 66955010,
+          "dtypes": {
+            "BF16": 104
+          },
+          "tensor_bytes": 133910020
+        },
+        "quantised_deployment": {
+          "present": true,
+          "tensors": 212,
+          "dtypes": {
+            "F32": 72,
+            "F16": 68,
+            "U8": 72
+          },
+          "tensor_bytes": 72868396,
+          "by_group": {
+            "embeddings_unquantised": {
+              "tensors": 4,
+              "bytes": 47671296
+            },
+            "transformer_quantised": {
+              "tensors": 48,
+              "bytes": 21252096
+            },
+            "quant_scales_and_maps": {
+              "tensors": 108,
+              "bytes": 2659368
+            },
+            "classifier_head_unquantised": {
+              "tensors": 4,
+              "bytes": 1184260
+            },
+            "other": {
+              "tensors": 48,
+              "bytes": 101376
+            }
+          }
+        },
+        "directory_bytes": {
+          "adapter": 2968674,
+          "model": 134867619,
+          "deploy": 73841388,
+          "quantized": 73841388
+        },
+        "shipped_bytes": 73841388
+      }
+    ],
+    "identical_trainable_parameters": true,
+    "trainable_parameters": 739586,
+    "adapter_bytes_lora": 1777948,
+    "adapter_bytes_qlora": 2962192,
+    "adapter_ratio": 1.6660734734649156,
+    "adapter_difference_explained": "identical tensor names and shapes; the LoRA run serialised four tensors as BF16 and the QLoRA run wrote all 28 as F32",
+    "shipped_bytes_lora": 134867669,
+    "shipped_bytes_qlora": 73841388,
+    "shipped_ratio": 1.826450892282794,
+    "shipped_reduction": 0.45249007009975084,
+    "weight_bytes_bf16": 133910020,
+    "weight_bytes_nf4": 72868396,
+    "effective_bits_per_weight_whole_model": 8.706550383608336,
+    "embedding_share_of_deployment": 0.6542108598081396,
+    "reading": "NF4 reaches under a third of the shipped bytes. The embedding table is the majority of a small encoder and is left at fp16, so the whole-model rate is about 8.7 bits per weight and the deployment shrinks by a factor near 1.8, not 4"
+  },
+  "training_cost": {
+    "status": "MEASURED",
+    "rows": [
+      {
+        "id": "sms_spam-lora-05570710f90c0662f841d428",
+        "method": "lora",
+        "seed": 1,
+        "train_runtime": 37.5125,
+        "train_samples_per_second": 330.13,
+        "total_flos": 196087943028480.0,
+        "train_loss": 0.04335887529899292,
+        "epoch": 3.0
+      },
+      {
+        "id": "sms_spam-lora-5ecbcc0dc970fe853f3927e4",
+        "method": "lora",
+        "seed": 2,
+        "train_runtime": 37.9616,
+        "train_samples_per_second": 326.225,
+        "total_flos": 197325861328896.0,
+        "train_loss": 0.043342113485246976,
+        "epoch": 3.0
+      },
+      {
+        "id": "sms_spam-lora-916188c8f1a69177126c1dd9",
+        "method": "lora",
+        "seed": 0,
+        "train_runtime": 34.0315,
+        "train_samples_per_second": 363.898,
+        "total_flos": 198997472095104.0,
+        "train_loss": 0.04698205120303218,
+        "epoch": 3.0
+      },
+      {
+        "id": "sms_spam-qlora-a5512e8be785c14da0c986e0",
+        "method": "qlora",
+        "seed": 0,
+        "train_runtime": 93.222,
+        "train_samples_per_second": 132.844,
+        "total_flos": 198997472095104.0,
+        "train_loss": 0.048057396378782063,
+        "epoch": 3.0
+      }
+    ],
+    "lora_runtime_mean_s": 36.501866666666665,
+    "qlora_runtime_s": 93.222,
+    "flops_matched_pair": {
+      "seed": 0,
+      "total_flos": 198997472095104.0,
+      "lora_runtime_s": 34.0315,
+      "qlora_runtime_s": 93.222,
+      "slowdown": 2.73928566181332,
+      "reading": "identical recorded FLOPs, so the ratio isolates the per-step cost of dequantising an NF4 base rather than any difference in work done"
+    }
+  },
+  "nf4_constant_check": {
+    "status": "MEASURED",
+    "quantised_parameters": 42467328,
+    "bytes_spent_including_scales": 23911464,
+    "measured_bits_per_weight": 4.504444263599537,
+    "assumed_bits_per_weight": 4.5,
+    "relative_error": 0.0009876141332304893,
+    "reading": "the constant the planner's memory model assumes is within a tenth of a percent of what the artefact spends, so the memory predictions below inherit a sound width term even though they are not themselves measured"
+  },
+  "memory": {
+    "status": "DERIVED \u2014 equations, not measurements",
+    "why": "torch cannot be loaded on this host, so no resident set was sampled; these are the planner's own predictions",
+    "activation_constant_used": 24.0,
+    "activation_constant_note": "recomputed for the DistilBERT geometry; the module default of 19 is the 1.7B Qwen value",
+    "training": [
+      {
+        "method": "lora",
+        "batch": 1,
+        "base_bits_effective": 16.0,
+        "frozen_base_bytes": 133910020,
+        "adapter_and_optimiser_bytes": 11833376,
+        "activation_bytes": 5779071,
+        "training_peak_bytes": 151522467,
+        "full_finetune_equivalent_bytes": 1077059231
+      },
+      {
+        "method": "lora",
+        "batch": 8,
+        "base_bits_effective": 16.0,
+        "frozen_base_bytes": 133910020,
+        "adapter_and_optimiser_bytes": 11833376,
+        "activation_bytes": 46232570,
+        "training_peak_bytes": 191975966,
+        "full_finetune_equivalent_bytes": 1117512730
+      },
+      {
+        "method": "lora",
+        "batch": 16,
+        "base_bits_effective": 16.0,
+        "frozen_base_bytes": 133910020,
+        "adapter_and_optimiser_bytes": 11833376,
+        "activation_bytes": 92465141,
+        "training_peak_bytes": 238208537,
+        "full_finetune_equivalent_bytes": 1163745301
+      },
+      {
+        "method": "qlora",
+        "batch": 1,
+        "base_bits_effective": 4.5,
+        "frozen_base_bytes": 37662193,
+        "adapter_and_optimiser_bytes": 11833376,
+        "activation_bytes": 5779071,
+        "training_peak_bytes": 55274640,
+        "full_finetune_equivalent_bytes": 1077059231
+      },
+      {
+        "method": "qlora",
+        "batch": 8,
+        "base_bits_effective": 4.5,
+        "frozen_base_bytes": 37662193,
+        "adapter_and_optimiser_bytes": 11833376,
+        "activation_bytes": 46232570,
+        "training_peak_bytes": 95728139,
+        "full_finetune_equivalent_bytes": 1117512730
+      },
+      {
+        "method": "qlora",
+        "batch": 16,
+        "base_bits_effective": 4.5,
+        "frozen_base_bytes": 37662193,
+        "adapter_and_optimiser_bytes": 11833376,
+        "activation_bytes": 92465141,
+        "training_peak_bytes": 141960710,
+        "full_finetune_equivalent_bytes": 1163745301
+      }
+    ],
+    "training_peak_ratio_at_batch_1": 2.741265560481262,
+    "inference": {
+      "lora": {
+        "weight_bytes": 133910020,
+        "activation_bytes": 14155776,
+        "resident_bytes": 148065796
+      },
+      "qlora": {
+        "weight_bytes": 72868396,
+        "activation_bytes": 14155776,
+        "resident_bytes": 87024172
+      }
+    },
+    "inference_resident_ratio": 1.7014329765757497,
+    "inference_note": "a sequence classifier runs one forward pass and keeps no KV cache, so the KV term in modelrig.resources is zero here and is deliberately not included"
+  },
+  "latency_and_energy": {
+    "status": "DERIVED \u2014 equations, not measurements",
+    "why": "no forward pass could be timed on this host and no power rail was instrumented; energy is P_draw * latency, not a reading",
+    "profile": {
+      "bw_eff_gbps": 9.24,
+      "overhead_ms_per_token": 2.16,
+      "prefill_ref_tok_s": 50.0,
+      "reference_params": 1720000000,
+      "power_draw_w": 3.5,
+      "thermal_derate_180s": 0.6
+    },
+    "tokens_in": 128,
+    "tokens_out": 0,
+    "effective_flops_per_second": 172000000000.0,
+    "rows": [
+      {
+        "method": "lora",
+        "weight_bytes": 133910020,
+        "prefill_s": 0.09965396837209302,
+        "decode_s": 0.0,
+        "total_s": 0.09965396837209302,
+        "derated_s": 0.1660899472868217,
+        "thermal_derate": 0.6,
+        "joules_per_request": 0.5813148155038759,
+        "requests_per_charge": 83448.75909958046
+      },
+      {
+        "method": "qlora",
+        "weight_bytes": 72868396,
+        "prefill_s": 0.09965396837209302,
+        "decode_s": 0.0,
+        "total_s": 0.09965396837209302,
+        "derated_s": 0.1660899472868217,
+        "thermal_derate": 0.6,
+        "joules_per_request": 0.5813148155038759,
+        "requests_per_charge": 83448.75909958046
+      }
+    ],
+    "reading": "prefill is compute-bound and scales with parameter count, which quantisation does not change, so the two methods are predicted to cost the same per request on this profile; quantisation buys footprint here, not speed"
+  },
+  "quantisation_sweep": {
+    "status": "MEASURED",
+    "scope": "the centroid classifier, not the transformer path; offered as measured context for the quantisation question, not as a LoRA/QLoRA result",
+    "rows": [
+      {
+        "task": "sms",
+        "n_classes": 2,
+        "quantisation": "int8",
+        "accuracy_mean": 0.9443905593275137,
+        "accuracy_delta_vs_fp32": -0.0009699321047527132,
+        "macro_f1_delta_vs_fp32": -0.0014457684415505323,
+        "answer_flip_rate": 0.0022631749110895573,
+        "warm_p50_ms": 0.6562166575652858,
+        "warm_p50_ms_fp32": 0.6296666688285768
+      },
+      {
+        "task": "sms",
+        "n_classes": 2,
+        "quantisation": "int4",
+        "accuracy_mean": 0.9256385386356288,
+        "accuracy_delta_vs_fp32": -0.019721952796637576,
+        "macro_f1_delta_vs_fp32": -0.034358355934504536,
+        "answer_flip_rate": 0.028128031037827354,
+        "warm_p50_ms": 0.670150009682402,
+        "warm_p50_ms_fp32": 0.6296666688285768
+      },
+      {
+        "task": "youtube_spam",
+        "n_classes": 2,
+        "quantisation": "int8",
+        "accuracy_mean": 0.9068203650336215,
+        "accuracy_delta_vs_fp32": 0.0009606147934678733,
+        "macro_f1_delta_vs_fp32": 0.0009461474960040794,
+        "answer_flip_rate": 0.002881844380403458,
+        "warm_p50_ms": 0.3305499946388106,
+        "warm_p50_ms_fp32": 0.3139999947355439
+      },
+      {
+        "task": "youtube_spam",
+        "n_classes": 2,
+        "quantisation": "int4",
+        "accuracy_mean": 0.9087415946205571,
+        "accuracy_delta_vs_fp32": 0.0028818443804035088,
+        "macro_f1_delta_vs_fp32": 0.0027920671491521443,
+        "answer_flip_rate": 0.027857829010566763,
+        "warm_p50_ms": 0.3585500138190885,
+        "warm_p50_ms_fp32": 0.3139999947355439
+      },
+      {
+        "task": "sentiment",
+        "n_classes": 2,
+        "quantisation": "int8",
+        "accuracy_mean": 0.746218487394958,
+        "accuracy_delta_vs_fp32": -0.0028011204481792618,
+        "macro_f1_delta_vs_fp32": -0.002770145158006332,
+        "answer_flip_rate": 0.014005602240896359,
+        "warm_p50_ms": 0.3715833299793303,
+        "warm_p50_ms_fp32": 0.36084999252731603
+      },
+      {
+        "task": "sentiment",
+        "n_classes": 2,
+        "quantisation": "int4",
+        "accuracy_mean": 0.680672268907563,
+        "accuracy_delta_vs_fp32": -0.06834733893557421,
+        "macro_f1_delta_vs_fp32": -0.07181673259234,
+        "answer_flip_rate": 0.16358543417366947,
+        "warm_p50_ms": 0.39228332267763716,
+        "warm_p50_ms_fp32": 0.36084999252731603
+      },
+      {
+        "task": "review_source",
+        "n_classes": 3,
+        "quantisation": "int8",
+        "accuracy_mean": 0.7484593837535014,
+        "accuracy_delta_vs_fp32": 0.003361344537815114,
+        "macro_f1_delta_vs_fp32": 0.003334916061115467,
+        "answer_flip_rate": 0.013445378151260505,
+        "warm_p50_ms": 0.36324999139954645,
+        "warm_p50_ms_fp32": 0.3507999936118722
+      },
+      {
+        "task": "review_source",
+        "n_classes": 3,
+        "quantisation": "int4",
+        "accuracy_mean": 0.6929971988795518,
+        "accuracy_delta_vs_fp32": -0.05210084033613449,
+        "macro_f1_delta_vs_fp32": -0.05193031317587349,
+        "answer_flip_rate": 0.17142857142857143,
+        "warm_p50_ms": 0.4066666782212754,
+        "warm_p50_ms_fp32": 0.3507999936118722
+      },
+      {
+        "task": "trec_questions",
+        "n_classes": 6,
+        "quantisation": "int8",
+        "accuracy_mean": 0.6405959031657356,
+        "accuracy_delta_vs_fp32": -0.0003103662321539691,
+        "macro_f1_delta_vs_fp32": -0.00034645246177866795,
+        "answer_flip_rate": 0.0111731843575419,
+        "warm_p50_ms": 0.6303166640767207,
+        "warm_p50_ms_fp32": 0.5908666644245386
+      },
+      {
+        "task": "trec_questions",
+        "n_classes": 6,
+        "quantisation": "int4",
+        "accuracy_mean": 0.6185599006828058,
+        "accuracy_delta_vs_fp32": -0.022346368715083775,
+        "macro_f1_delta_vs_fp32": -0.021915658740039756,
+        "answer_flip_rate": 0.1288019863438858,
+        "warm_p50_ms": 0.7215333171188831,
+        "warm_p50_ms_fp32": 0.5908666644245386
+      }
+    ],
+    "int4_accuracy_delta_range": [
+      -0.06834733893557421,
+      0.0028818443804035088
+    ],
+    "int8_flip_rate_range": [
+      0.0022631749110895573,
+      0.014005602240896359
+    ]
+  },
+  "boundary": {
+    "torch": "OSError: [WinError 4551] An Application Control policy has blocked this file. Error loading \"d:\\NMIMS\\SEM-VII\\CAPSTONE\\Majestic_LLM\\.venv\\Lib\\site-packages\\torch\\lib\\shm.dll\" or one of its dependencies.",
+    "measured_here": [
+      "accuracy, macro-F1 and Wilson intervals, from the recorded eval reports",
+      "per-prediction agreement between the seed-0 LoRA and QLoRA builds",
+      "trainable parameter counts, tensor shapes and dtypes, from safetensors headers",
+      "adapter, merged-model and quantised-deployment sizes in bytes",
+      "where the deployment's bytes go, by tensor group",
+      "training wall-clock and total FLOPs, as the trainer recorded them",
+      "effective bits per weight of the NF4 deployment"
+    ],
+    "derived_not_measured": [
+      "inference latency",
+      "resident memory at inference",
+      "training peak memory",
+      "energy per request and requests per charge"
+    ],
+    "why_not_measured": "torch will not load on this host, so no forward pass could be timed, no resident set sampled, and no power draw read. Energy is in every case P_draw * predicted latency at an assumed 3.5 W, which is an arithmetic restatement of the latency prediction and not an independent measurement.",
+    "what_would_close_it": [
+      "a host without the Application Control policy, or a CPU-only torch build that does not load shm.dll",
+      "both methods trained at the same three seeds, so the accuracy comparison has more than one QLoRA point",
+      "a wall-power or battery-rail reading for the energy row",
+      "an int4 deployment that also quantises the embedding table, which is where the measured bytes actually are"
+    ]
+  },
+  "findings": [
+    "MEASURED: at seed 0 the LoRA and QLoRA builds produced the same label on all 1031 test rows \u2014 identical accuracy 0.9913 and macro-F1, so there is no accuracy cost to test",
+    "MEASURED: LoRA accuracy over 3 seeds spans 0.9855-0.9913; the single QLoRA seed falls inside that range",
+    "MEASURED: both methods train the identical 739,586 parameters; the QLoRA adapter is 1.67x larger on disk purely because four tensors were written F32 instead of BF16",
+    "MEASURED: the shipped deployment falls 134,867,669 to 73,841,388 bytes, a 45.2% reduction (1.83x)",
+    "MEASURED: that deployment averages 8.71 bits per weight, not 4, because the embedding table is 65.4% of its bytes and stays at fp16",
+    "MEASURED: at identical recorded FLOPs, QLoRA training took 93.2 s against LoRA's 34.0 s \u2014 a 2.74x slowdown attributable to NF4 dequantisation per step",
+    "MEASURED: the planner's NF4_BITS_EFFECTIVE = 4.5 against 4.504 bits per weight in the artefact \u2014 0.10% error, so the memory model's width term is sound",
+    "DERIVED: predicted training peak is 2.74x lower under QLoRA at batch 1, and predicted inference residency 1.70x lower",
+    "NOTE: the 2.74x memory ratio and the 2.74x training slowdown are independent quantities that coincide to two decimals \u2014 the first comes from 16 against 4.5 bits per frozen weight, the second from measured wall-clock. Neither is derived from the other",
+    "DERIVED: predicted per-request latency is 166 ms for both methods (0.6 J) \u2014 prefill is compute-bound in the parameter count, which quantisation does not reduce, so quantisation is predicted to buy footprint and not speed",
+    "MEASURED, different backend: int4 on the centroid classifier moves accuracy by -0.0683 to +0.0029 across five tasks"
+  ]
+}
